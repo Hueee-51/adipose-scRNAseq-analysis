@@ -376,4 +376,4 @@ Email: mfeinberg@bwh.harvard.edu
 For questions about the computational analysis workflow, please contact:
 
 **Yi Hu, PhD**  
-Email: yihu@bwh.harvard.edu; hueee.51@gmail.com
+Email: yihu@bwh.harvard.edu
