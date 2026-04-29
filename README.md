@@ -276,7 +276,7 @@ Large files, including raw count matrices, processed Seurat objects, intermediat
 Placeholder accession:
 
 ```text
-GEO accession: GSEXXXXXX
+GEO accession: GSE000000
 ```
 
 The repository is designed to document the computational workflow. It is not intended to store large sequencing datasets or intermediate Seurat objects.
@@ -362,5 +362,6 @@ Citation information will be added upon publication.
 ---
 
 ## Contact
-Mark W. Feinberg, Cardiovascular Division, Heart & Vascular Institute, Brigham and Women’s Hospital, Harvard Medical School, Boston, MA 02115, USA. Fax: 617-525-4380; Tel: 617-525-4381. Email: mfeinberg@bwh.harvard.edu
+**Mark W. Feinberg**, Cardiovascular Division, Heart & Vascular Institute, Brigham and Women’s Hospital, Harvard Medical School, Boston, MA 02115, USA. Fax: 617-525-4380; Tel: 617-525-4381. Email: mfeinberg@bwh.harvard.edu
+
 For questions about the analysis workflow, please contact the corresponding authors of the associated manuscript.
