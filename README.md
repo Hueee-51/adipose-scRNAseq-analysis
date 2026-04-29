@@ -362,6 +362,18 @@ Citation information will be added upon publication.
 ---
 
 ## Contact
-**Mark W. Feinberg**, Cardiovascular Division, Heart & Vascular Institute, Brigham and Women’s Hospital, Harvard Medical School, Boston, MA 02115, USA. Fax: 617-525-4380; Tel: 617-525-4381. Email: mfeinberg@bwh.harvard.edu
 
-For questions about the analysis workflow, please contact the corresponding authors of the associated manuscript.
+For manuscript correspondence, please contact:
+
+**Mark W. Feinberg**  
+Cardiovascular Division, Heart & Vascular Institute  
+Brigham and Women’s Hospital, Harvard Medical School  
+Boston, MA 02115, USA  
+Tel: 617-525-4381  
+Fax: 617-525-4380  
+Email: mfeinberg@bwh.harvard.edu
+
+For questions about the computational analysis workflow, please contact:
+
+**Yi Hu**  
+Email: yihu@bwh.harvard.edu; hueee.51@gmail.com
