@@ -1,0 +1,1990 @@
+---
+title: "ASPC_plot"
+author: "Y HU"
+date: "2024-04-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+rm(list = ls())
+knitr::opts_knit$set(root.dir = normalizePath("/Users/hueee/Lab/Feinberg Lab/Single_cell_adipose_tissue"))
+
+packages = c("ggplot2","tidyverse","Seurat", "AnnotationHub", "janitor",
+             "reshape", "DT","cowplot","patchwork","forcats", "devtools",
+             "tidyverse","magrittr","ArchR","RColorBrewer","ggsci","patchwork","readxl","biomaRt")
+
+for (pkg in packages) {
+  if (!require(pkg, character.only = TRUE)) {
+    install.packages(pkg)
+    library(pkg, character.only = TRUE)
+  }
+}
+
+```
+
+# Differential Expression Analysis
+## Volcano for DE_ASPC
+```{r Volcano_DE_ASPC}
+getwd()
+DE_ASPC<- read.csv("./DE_ASPC/results/2024-07-17/ASPC-HFSC_vs_ASPC-Chow/DE_results_ASPC-HFSC_vs_ASPC-Chow.csv")
+head(DE_ASPC) #gene p_val avg_log2FC pct.1 pct.2 p_val_adj
+colnames(DE_ASPC)[1:3] <- c("Gene","P.Value","logFC","pct.1","pct.2","adjP.Value")
+rownames(DE_ASPC) <- DE_ASPC$Gene
+head(DE_ASPC)
+x <- DE_ASPC
+
+logFCcut <- 1 #log2-foldchange
+pvalCut <- 1e-2 #P.value
+adjPcut <- 0.1 #adj.P.value
+
+#for advanced mode
+logFCcut2 <- 2 
+logFCcut3 <- 5
+pvalCut2 <- 1e-10
+pvalCut3 <- 1e-20
+
+#置x，y軸的最大最小位置
+xmin <- (range(x$logFC)[1]- (range(x$logFC)[1]+ 10))
+xmax <- (range(x$logFC)[1]+ (10-range(x$logFC)[1]))
+ymin <- 0
+ymax <- -log10(x$P.Value)[3] * 1.1
+
+# 基因名的颜色，需大于等于pathway的数量，这里自定义了足够多的颜色
+mycol <- c("darkgreen","chocolate4","blueviolet","#223D6C","#D20A13","#088247","#58CDD9","#7A142C","#5D90BA","#431A3D","#91612D","#6E568C","#E0367A","#D8D155","#64495D","#7CC767")
+
+# 複雜的的setting for color
+n1 <- length(x[, 1])
+cols <- rep("grey", n1)
+names(cols)<- rownames(x)
+
+#不同阈值的点的颜色
+#cols[x$P.Value < pvalCut & x$logFC >logFCcut]<- "#FB9A99"
+#cols[x$P.Value < pvalCut2 & x$logFC > logFCcut2]<- "#ED4F4F"
+#cols[x$P.Value < pvalCut & x$logFC < -logFCcut]<- "#B2DF8A"
+#cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- "#329E3F"
+cols[x$P.Value < pvalCut & x$logFC >logFCcut]<- "#f77e7e"
+cols[x$P.Value < pvalCut2 & x$logFC >  logFCcut2]<- "#c21b2b"
+cols[x$P.Value < pvalCut & x$logFC < -logFCcut]<- "#73b6f5"
+cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- "#136cbf"
+color_transparent <- adjustcolor(cols, alpha.f = 0.5)
+x$color_transparent <- color_transparent
+
+# 複雜的的setting for size
+n1 <- length(x[, 1])
+size <- rep(1, n1)
+
+#不同阈值的点的大小
+size[x$P.Value < pvalCut & x$logFC > logFCcut]<- 2
+size[x$P.Value < pvalCut2 & x$logFC > logFCcut2]<- 4
+size[x$P.Value < pvalCut3 & x$logFC > logFCcut3]<- 6
+size[x$P.Value < pvalCut & x$logFC < -logFCcut]<- 2
+size[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- 4
+size[x$P.Value < pvalCut3 & x$logFC < -logFCcut3]<- 6
+
+# Construct the plot objASPCt
+#BiocManager::install('ggthemes')
+library(ggplot2)
+library(ggrepel)
+library(ggthemes)
+library(gridExtra)
+p1 <- ggplot(data=x, aes(logFC, -log10(P.Value), label = Gene, color = pathway)) +
+  geom_point(alpha = 0.6, size = size, colour = x$color_transparent) +
+
+  labs(x=bquote(~Log[2]~"(fold change)"), y=bquote(~-Log[10]~italic("P-value")), title="") + 
+  ylim(c(ymin,ymax)) + 
+  scale_x_continuous(
+    breaks = c(-5, -2,-logFCcut, 0, logFCcut, 2, 5), #刻度线的位置
+    labels = c(-5, -2, -logFCcut, 0, logFCcut, 2 , 5),
+    limits = c(-10, 10) #x轴范围，两侧对称才好看
+  ) +
+  #或用下面这行：
+  #xlim(c(xmin, xmax)) + 
+
+#画阈值分界线
+geom_vline(xintercept = c(-logFCcut, logFCcut), color="grey40", 
+           linetype="longdash", lwd = 0.1) + #虚线的形状和粗细
+geom_hline(yintercept = -log10(pvalCut), color="grey40", 
+           linetype="longdash", lwd = 0.1) +
+  
+theme_bw(base_size = 10#, base_family = "Times" #修改字体
+         ) +
+theme(panel.grid=element_blank())
+
+p1 <- p1 + 
+geom_vline(xintercept = c(-logFCcut2, logFCcut2), color="grey40", 
+           linetype="longdash", lwd = 0.1) +
+geom_hline(yintercept = -log10(pvalCut2), color="grey40", 
+             linetype="longdash", lwd = 0.1)
+
+# 显示 logFC > n 的基因的基因名
+n = 2
+p1 + geom_text_repel(aes(x = logFC,
+                         y = -log10(P.Value),
+                         label = ifelse(logFC > n & -log10(P.Value) > 5, rownames(x),"")),
+                     colour="#9c0917", size = 3, box.padding = unit(0.5, "lines"),
+                     point.padding = unit(0.01, "lines")) +
+  geom_text_repel(aes(x = logFC, 
+                      y = -log10(P.Value), 
+                      label = ifelse(logFC < -n & -log10(P.Value) > 5, rownames(x),"")),
+                  colour="#0054a3", size = 3, box.padding = unit(0.5, "lines"), 
+                  point.padding = unit(0.01, "lines"))
+ggsave("./DE_ASPC/DE_ASPC_volcano.pdf", width=6,height=6)
+ggsave("./DE_ASPC/DE_ASPC_volcano.png", width=6,height=6)
+```
+
+## Bubble for DE_ASPC_top
+```{r Bubble_ASPC_top}
+library(ggplot2)
+library(readxl)
+data <- DE_ASPC
+data_up <- subset(data,logFC>0)[1:20,1:6]
+data_down <- subset(data,logFC<0)[1:20,1:6]
+data_top20 <- rbind(data_up,data_down)
+data_top20 <- dplyr::arrange(data_top20,logFC)
+data_top20$P.Value[data_top20$P.Value == 0] <- min(data_top20$P.Value[data_top20$P.Value > 0])/100
+# data_top20 <- data_top20[order(data_top20$logFC, decreasing = F),]
+# min_nonzero_value <- min(data_top20$P.Value[data_top20$P.Value != 0])
+# data_top20$P.Value[data_top20$P.Value == 0] <- min_nonzero_value * 1e-2
+
+# Convert Symbol to a factor to control the order of plotting 
+data_top20$Gene <- factor(data_top20$Gene, levels = unique(data_top20$Gene))
+
+# Map shapes and colors based on LogFC
+data_top20$Shape <- ifelse(data_top20$logFC > 0, 24, 25) # 24 for triangle up, 25 for triangle down
+data_top20$Color <- ifelse(data_top20$logFC > 0, "#DA7680", "#72A7D9")
+data_top20$Regulation <- factor(ifelse(data_top20$logFC > 0, "Up", "Down"),
+                          levels = c("Up", "Down"))
+# Plot
+ggplot(data_top20, aes(x=logFC, y=Gene, size=-log10(P.Value), shape=Regulation, color=Regulation)) +
+  geom_point(stroke= 1) +
+  scale_shape_manual(values = c("Up" = 24, "Down" = 25)) +
+  scale_color_manual(values = c("Up" = "#DA7680", "Down" = "#72A7D9")) +
+  theme_minimal() +
+  theme(panel.background = element_rect(fil="white"), 
+        panel.grid.major = element_line(color="lightgrey",size=0.1),
+        axis.text.x = element_text(size = 8, face = "bold"),
+        axis.text.y = element_text(size = 11, color="black",face = "bold"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")) +
+  labs(title="Top20 Up- & Down-regulated Genes in ASPCs",
+       size = bquote(~-Log[10]~italic("P.Value")),
+       x="LogFC", 
+       y="Gene Symbol",
+       color = "Gene Regulation",
+       shape = "Gene Regulation")+
+  scale_x_continuous(
+    breaks = c(-5, 0, 5), #刻度线的位置
+    labels = c(-5, 0, 5),
+    limits = c(-6, 6.1)  #x轴范围，两侧对称才好看 
+  ) +
+  guides(size = guide_legend(override.aes = list(shape = 17))) 
+
+# Save the plot
+ggsave("./DE_ASPC/DE_ASPC_top20_logFC.pdf", width=5, height=8)
+ggsave("./DE_ASPC/DE_ASPC_top20_logFC.png", width=5, height=8,dpi = 600)
+```
+## ASCP Unique DEGs (Dotplot)
+```{r ASCP_unique_DEGs}
+DEGs_selected <- subset(DE_ASPC, P.Value < 0.01 & abs(logFC) > 4)
+
+seurat.combined.sct <- readRDS("./3_Integration/data/2024-05-10/seurat_combined_sct_umap_renamed.rds")
+table(seurat.combined.sct@meta.data$renamed_cluster)
+Idents(seurat.combined.sct) <- "renamed_cluster"
+levels(seurat.combined.sct)
+DefaultAssay(seurat.combined.sct) <- "RNA"
+
+getwd()
+pdf(file=sprintf('./pathway_gene/ASPC/Top_DEGs_Dotplot_celltypes.pdf'), width=20,height=5)
+p <- DotPlot(seurat.combined.sct, 
+             features = DEGs_selected$Gene,
+             dot.scale = 8,
+             cols = "RdBu",
+             split.by = "sample") +
+  RotatedAxis() +
+  theme(
+    panel.border = element_rect(color="black"), # 面板边框
+    panel.spacing = unit(1, "mm"),
+    # strip.background = element_rect(color="red"), # 可选
+    strip.text = element_text(margin=margin(b=3, unit="mm")),
+    strip.placement = 'outlet', 
+    axis.line = element_blank()
+  ) +
+  labs(x = "", y = "", title = "Significant DE Transcripts in ASPCs (Chow vs. HFSC)")
+print(p)
+dev.off()
+
+getwd()
+pdf(file=sprintf('./pathway_gene/ASPC/Top_DEGs_Dotplot_celltypes.pdf'), width=8,height=10)
+scCustomize::Clustered_DotPlot(seurat.combined.sct, features = DEGs_selected$Gene,
+                               plot_km_elbow = FALSE,split.by = "sample",cluster_ident = F)
+dev.off()
+
+png(sprintf('./pathway_gene/ASPC/Top_DEGs_Dotplot_celltypes.png'), width=8,height=10,units = "in",res = 500)
+scCustomize::Clustered_DotPlot(seurat.combined.sct, features = DEGs_selected$Gene,
+                               plot_km_elbow = FALSE,split.by = "sample",cluster_ident = F)
+dev.off()
+png(sprintf('./pathway_gene/ASPC/Top_DEGs_Dotplot_celltypes2.png'), width=8,height=10,units = "in",res = 500)
+scCustomize::Clustered_DotPlot(seurat.combined.sct, features = DEGs_selected$Gene,
+                               plot_km_elbow = FALSE,split.by = "sample",cluster_ident = T)
+dev.off()
+```
+
+## ASCP ECM pathway (Dotplot)
+```{r ASCP_ECM_pw}
+pw_gene_list <- c("Col4a1", "Col4a5", "Col8a1", "Ctsb", "Ctsd", "Mmp11", "Mmp12", "Col14a1", "Col18a1", "Col4a2", "Col4a6", "Ctsk", "Mmp2", "Adamts14", "Colgalt2", "Pcolce", "Dmd", "Hspg2", "Lum")
+
+levels(seurat.combined.sct.ASPC.new) <- c("RMP-HFSC","RMP-Chow","FAP-HFSC","FAP-Chow","PreA-HFSC","PreA-Chow","Areg-HFSC","Areg-Chow","ASC-HFSC","ASC-Chow")
+pdf(file=sprintf('./pathway_gene/ASPC/pw_ECM.pdf'),width=10,height=5)
+p <- DotPlot(seurat.combined.sct.ASPC.new, 
+              features = pw_gene_list, 
+              dot.scale = 8,
+              cols = "RdBu") +
+  RotatedAxis() +
+  theme(
+    panel.border = element_rect(color="black"), #面板边框
+    panel.spacing = unit(1, "mm"),
+    #strip.background = element_rect(color="red"),
+    strip.text = element_text(margin=margin(b=3, unit="mm")),
+    strip.placement = 'outlet', 
+    axis.line = element_blank(),
+  ) +
+  labs(x="", y="",title = "Top Driver Expression of the ASC Significant Pathway")
+print(p)
+cat("\n")
+dev.off()
+```
+
+# ASPC Functional Analysis
+```{r label_wrap}
+# 构建一个防通路名太长的函数
+label_wrap <- function(label, width) {
+  sapply(label, function(x) {
+    words <- strsplit(x, " ")[[1]]
+    lines <- ""
+    current_line <- ""
+    for (word in words) {
+      if (nchar(current_line) + nchar(word) + 1 > width) {
+        lines <- paste(lines, current_line, sep = "\n")
+        current_line <- word
+      } else {
+        if (current_line == "") {
+          current_line <- word
+        } else {
+          current_line <- paste(current_line, word)
+        }
+      }
+    }
+    paste(lines, current_line, sep = "\n")
+  })
+}
+```
+## Canonical Pathways
+```{r IPA_cano}
+data <- read_excel("./DE_ASPC/IPA_canonical.xlsx")
+data <- data[order(data$`zScore`, decreasing = TRUE),]
+data$`Ingenuity Canonical Pathways` <- factor(data$`Ingenuity Canonical Pathways`, 
+                                              levels = rev(data$`Ingenuity Canonical Pathways`))
+
+data$Shape <- ifelse(data$zScore > 0, 24, ifelse(data$zScore < 0, 25, 21)) # 24 for triangle up, 25 for triangle down
+data$Regulation <- factor(ifelse(data$zScore > 0, "Up", ifelse(data$zScore < 0, "Down", "NA")), levels = c("Up", "Down","NA"))
+
+# Plot
+ggplot(data, aes(x=zScore, 
+                 y=`Ingenuity Canonical Pathways`, 
+                 size=Ratio*100, 
+                 shape=Regulation, 
+                 color=`-log(p-value)`)) +
+  geom_point(stroke= 1) +
+  scale_shape_manual(values = c("Up" = 24, "Down" = 25, "NA" = 21)) +
+  scale_color_gradient(low = "#A880CF",high = "#FEDD94") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fil="white"), 
+        panel.grid.major = element_line(color="lightgrey",size=0.1),
+        title = element_text(size = 12, face = "bold"),
+        axis.text.x = element_text(size = 8, color="black"),
+        axis.text.y = element_text(size = 10, color="black"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")) +
+  labs(title="Top 10 Up- & Down-regulated Canonical Pathways in ASPCs",
+       size = "Ratio(%)",
+       x="Z-score", 
+       y="Canonical Pathways",
+       color = bquote(~-log[10]~italic("P-value")),
+       shape = paste("Regulation", sep = "\n"))+
+  scale_x_continuous() +
+  scale_y_discrete(labels = label_wrap(levels(data$`Ingenuity Canonical Pathways`), width = 47))+
+  guides(size = guide_legend(override.aes = list(shape = 17)))
+ggsave("./DE_ASPC/Cano_top20.pdf", width=7, height=6)
+```
+
+## Cano_ChordPlot
+```{r cano_chord}
+data <- read_excel("./DE_ASPC/IPA_canonical_chord2.xlsx")
+colnames(data)[1] <- "Pathway"
+expr <- DE_ASPC
+#转成关系对数据；
+dt <- pivot_longer(data[1:6,],!Pathway, names_to = "index",
+                   values_to = "gene",
+                   values_drop_na = TRUE)
+
+# BiocManager::install("Hmisc") 转换基因名
+library(Hmisc)
+library(reshape2)
+library(GOplot)
+dt$gene <- str_to_title(dt$gene)
+#生成权重数值；
+n <- nrow(dt)
+dt$value <- rep(1,n)
+#去掉第2列,生成绘图数据；
+edge <- dt[-2]
+edge$Pathway <- factor(edge$Pathway, levels = (c(edge$Pathway) %>% unique()))
+#转成宽数据矩阵，用作绘图数据；
+mat <- acast(edge,gene~Pathway)
+#将NA替换为0；
+mat[is.na(mat)] <- 0
+#从表达量表格提取差异倍数数据；
+ind <- row.names(mat)
+
+ind <- gsub("Clec4c", "Clec4b1", ind)
+ind <- gsub("Fcgr1a", "Fcgr1", ind)
+ind <- gsub("Fcgr2a", "Fcgr3", ind)
+ind <- gsub("Fcgr3a/Fcgr3b", "Fcgr4", ind)
+ind <- gsub("Lilrb3", "Pirb", ind)
+ind <- gsub("Lyz", "Lyz1", ind)
+ind <- gsub("Tpsab1/Tpsb2", "Tpsb2", ind)
+ind <- gsub("C4a/C4b", "C4b", ind)
+ind <- gsub("Hla-A", "H2-Q10", ind)
+ind <- gsub("Hla-Dqa1", "H2-Aa", ind)
+ind <- gsub("Hla-Dqb1", "H2-Ab1", ind)
+ind <- gsub("Hla-Drb5", "H2-Eb1", ind)
+ind <- gsub("Hla-Dmb", "H2-DMb1", ind)
+ind <- gsub("Serpina3", "Serpina3n", ind)
+
+logFC <- expr[ind,]$logFC
+#将logfc数据加入到矩阵中；
+mat2 <- data.frame(mat,logFC)
+
+
+#自定义颜色；
+# mycol <- c("#9dacb3","#896f96","#003a6c","#db6000","#f2c76d","#0077c1","#d982ba","#5ea6a3")
+# mycol <- c("#ffaa00","#b37700","#ffeabf","#ffd580","#80d9ff","#bfecff","#005478","#0078ab")
+mycol <- c("#ffaa00","#b37700","#ffeabf","#80d9ff","#bfecff","#005478")
+#mycol <- c("#ffadad","#ffd6a5","#fdffb6","#caffbf","#9bf6ff","#a0c4ff","#bdb2ff","#ffc6ff")
+# mycol <- c("#7C4697","#5D90BA","#5ea6a3","#D8D155","#cf7685")
+#调整透明度；
+mycol1 <- alpha(mycol,0.9)
+
+#添加缝隙，根据log2FC进行排序，并指定渐变色；
+GOChord(mat2,
+        space = 0.02,
+        gene.size = 3,
+        process.label = 10,
+        border.size = 0,
+        ribbon.col = mycol1,
+        gene.order = 'logFC',
+        lfc.col=c('#de2128','white','#02a858'),
+        limit = c(1,0),
+        title = "Genes Significantly Impacting Pathways \nin ASPCs after 24-week HFSC Diet") 
+ggsave("./DE_ASPC/IPA_canonical_chord2.pdf", width = 8, height = 9.45)
+```
+
+## Clustered DotPlot for Cell types
+```{r Clustered_DotPlot}
+seurat.combined.sct <- readRDS("./3_Integration/data/2024-05-10/seurat_combined_sct_umap_renamed.rds")
+table(seurat.combined.sct@meta.data$renamed_cluster)
+Idents(seurat.combined.sct) <- "renamed_cluster"
+levels(seurat.combined.sct)
+DefaultAssay(seurat.combined.sct) <- "SCT"
+
+genelist <- subset(mat2, select = -logFC)
+pathway_genes_named <- lapply(names(genelist), function(pathway) {
+  rownames(genelist)[genelist[[pathway]] == 1]
+})
+names(pathway_genes_named) <- names(genelist)
+# 查看结果
+print(pathway_genes_named)
+
+expr_filter <- expr[abs(expr$logFC) >= 2 & expr$P.Value < 0.01, ]
+pathway_genes_named_filtered <- lapply(pathway_genes_named, function(genes) {
+  intersect(genes, expr_filter$Gene)
+})
+all_genes <- unlist(pathway_genes_named_filtered)
+# 查看基因出现次数
+gene_counts <- table(all_genes)
+# 筛选出重复基因
+duplicated_genes <- names(gene_counts[gene_counts > 1])
+# 打印重复基因及其出现次数
+print(gene_counts[gene_counts > 1])
+
+# 信号通路分组
+for(pathway_genes in names(filtered_pathway_lists)){
+pdf(file=sprintf('./pathway_gene/ASPC/Top_drivers_Dotplot_%s.pdf',pathway_genes), width=12,height=5)
+p <- DotPlot(seurat.combined.sct, 
+             features = filtered_pathway_lists[[pathway_genes]],
+             dot.scale = 8,
+             cols = "RdBu",
+             split.by = "sample") +
+  RotatedAxis() +
+  theme(
+    panel.border = element_rect(color="black"), # 面板边框
+    panel.spacing = unit(1, "mm"),
+    # strip.background = element_rect(color="red"), # 可选
+    strip.text = element_text(margin=margin(b=3, unit="mm")),
+    strip.placement = 'outlet', 
+    axis.line = element_blank()
+  ) +
+  labs(x = "", y = "", title = "Top Drivers of the ASPC Pathway in the 24w HFSC Across Cell Types")
+
+# p1 <- p + scale_x_discrete(limits = rev(levels(p$data$x)))
+print(p)
+cat("\n")
+dev.off()
+}
+
+seen_genes <- c()
+filtered_pathway_lists <- lapply(pathway_genes_named_filtered, function(genes) { # 遍历每个 pathway list，并根据优先级去重
+  unique_genes <- genes[!genes %in% seen_genes] # 筛选未见过的基因
+  seen_genes <<- c(seen_genes, unique_genes) # 更新已见基因集合
+  return(unique_genes)
+})
+
+# 无重复基因信号通路
+pdf(file=sprintf('./pathway_gene/ASPC/Top_drivers_Dotplot_noduplicated.pdf'), width=20,height=5)
+p <- DotPlot(seurat.combined.sct, 
+             features = filtered_pathway_lists,
+             dot.scale = 8,
+             cols = "RdBu",
+             split.by = "sample") +
+  RotatedAxis() +
+  theme(
+    panel.border = element_rect(color="black"), # 面板边框
+    panel.spacing = unit(1, "mm"),
+    # strip.background = element_rect(color="red"), # 可选
+    strip.text = element_text(margin=margin(b=3, unit="mm")),
+    strip.placement = 'outlet', 
+    axis.line = element_blank()
+  ) +
+  labs(x = "", y = "", title = "Top Drivers of the ASPC Pathway in the 24w HFSC Across Cell Types")
+print(p)
+dev.off()
+ASPC_drivers_percent_expressed <- p$data
+write.csv(ASPC_drivers_percent_expressed, "./pathway_gene/ASPC/Top_drivers_Dotplot_noduplicated_data.csv", quote = F)
+
+# 移除某些表达百分数太低的基因
+genes_to_remove <- c("Ahsg", "Ccn4", "Cfd", "Hr", "Mme", "Nfasc", "Prtn3", "Ptx3")
+# 对filtered_pathway_lists进行过滤
+filtered_pathway_lists <- lapply(filtered_pathway_lists, function(gene_list) {
+  gene_list[!gene_list %in% genes_to_remove]  # 保留不在genes_to_remove中的基因
+})
+# 检查过滤后的结果
+print(filtered_pathway_lists)
+
+genes_to_remove <- c("Sell","Syngr1","Spp1","Il1r2")
+filtered_pathway_lists_ASPC <- lapply(filtered_pathway_lists, function(gene_list) {
+  gene_list[!gene_list %in% genes_to_remove]  # 保留不在genes_to_remove中的基因
+})
+print(filtered_pathway_lists_ASPC)
+
+# 去低表达后的信号通路不重复分组
+seurat.combined.sct.ASPC <- subset(seurat.combined.sct, renamed_cluster == "ASPC")
+getwd()
+pdf(file=sprintf('./pathway_gene/ASPC/Top_drivers_Dotplot_ASPC.pdf'), width=12,height=3)
+p <- DotPlot(seurat.combined.sct.ASPC, 
+             features = filtered_pathway_lists_ASPC,
+             dot.scale = 5,
+             cols = "RdBu",
+             split.by = "sample") +
+  RotatedAxis() +
+  theme(
+    panel.border = element_rect(color="black"), # 面板边框
+    panel.spacing = unit(1, "mm"),
+    # strip.background = element_rect(color="red"), # 可选
+    strip.text = element_text(margin=margin(b=3, unit="mm")),
+    strip.placement = 'outlet', 
+    axis.line = element_blank()
+  ) +labs(x = "", y = "", title = "Key Drivers Expression of the Significant Pathway in ASPC")
+p$data$avg.exp.scaled <- scale(p$data$avg.exp)
+print(p)
+dev.off()
+
+ASPC_drivers_percent_expressed <- p$data
+write.csv(ASPC_drivers_percent_expressed, "./pathway_gene/ASPC/Top_drivers_Dotplot_noduplicated_data2.csv", quote = F)
+```
+
+# DE_Areg
+## Volcano for DE_Areg
+```{r Volcano_DE_MEC}
+DE_Areg<- read.csv("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/results/2024-07-17/DE_results_Areg-HFSC_vs_Chow.csv")
+head(DE_Areg) #gene p_val avg_log2FC pct.1 pct.2 p_val_adj
+colnames(DE_Areg)[1:3] <- c("Gene","P.Value","logFC","pct.1","pct.2","adjP.Value")
+rownames(DE_Areg) <- DE_Areg$Gene
+head(DE_Areg)
+x <- DE_Areg
+
+logFCcut <- 1 #log2-foldchange
+pvalCut <- 1e-2 #P.value
+adjPcut <- 0.1 #adj.P.value
+
+#for advanced mode
+logFCcut2 <- 2 
+logFCcut3 <- 5
+pvalCut2 <- 1e-10
+pvalCut3 <- 1e-20
+
+#置x，y軸的最大最小位置
+xmin <- (range(x$logFC)[1]- (range(x$logFC)[1]+ 10))
+xmax <- (range(x$logFC)[1]+ (10-range(x$logFC)[1]))
+ymin <- 0
+ymax <- -log10(sort(x$P.Value)[1]) * 1.1
+
+# 基因名的颜色，需大于等于pathway的数量，这里自定义了足够多的颜色
+mycol <- c("darkgreen","chocolate4","blueviolet","#223D6C","#D20A13","#088247","#58CDD9","#7A142C","#5D90BA","#431A3D","#91612D","#6E568C","#E0367A","#D8D155","#64495D","#7CC767")
+
+# 複雜的的setting for color
+n1 <- length(x[, 1])
+cols <- rep("grey", n1)
+names(cols)<- rownames(x)
+
+#不同阈值的点的颜色
+#cols[x$P.Value < pvalCut & x$logFC >logFCcut]<- "#FB9A99"
+#cols[x$P.Value < pvalCut2 & x$logFC > logFCcut2]<- "#ED4F4F"
+#cols[x$P.Value < pvalCut & x$logFC < -logFCcut]<- "#B2DF8A"
+#cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- "#329E3F"
+cols[x$P.Value < pvalCut & x$logFC >logFCcut]<- "#f77e7e"
+cols[x$P.Value < pvalCut2 & x$logFC >  logFCcut2]<- "#c21b2b"
+cols[x$P.Value < pvalCut & x$logFC < -logFCcut]<- "#73b6f5"
+cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- "#136cbf"
+color_transparent <- adjustcolor(cols, alpha.f = 0.5)
+x$color_transparent <- color_transparent
+
+# 複雜的的setting for size
+n1 <- length(x[, 1])
+size <- rep(1, n1)
+
+#不同阈值的点的大小
+size[x$P.Value < pvalCut & x$logFC > logFCcut]<- 2
+size[x$P.Value < pvalCut2 & x$logFC > logFCcut2]<- 4
+size[x$P.Value < pvalCut3 & x$logFC > logFCcut3]<- 6
+size[x$P.Value < pvalCut & x$logFC < -logFCcut]<- 2
+size[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- 4
+size[x$P.Value < pvalCut3 & x$logFC < -logFCcut3]<- 6
+
+# Construct the plot object
+#BiocManager::install('ggthemes')
+library(ggplot2)
+library(ggrepel)
+library(ggthemes)
+library(gridExtra)
+p1 <- ggplot(data=x, aes(logFC, -log10(P.Value), label = Gene, color = pathway)) +
+  geom_point(alpha = 0.6, size = size, colour = x$color_transparent) +
+
+  labs(x=bquote(~Log[2]~"(fold change)"), y=bquote(~-Log[10]~italic("P-value")), title="") + 
+  ylim(c(ymin,ymax)) + 
+  scale_x_continuous(
+    breaks = c(-5, -2,-logFCcut, 0, logFCcut, 2, 5), #刻度线的位置
+    labels = c(-5, -2, -logFCcut, 0, logFCcut, 2 , 5),
+    limits = c(-6.5, 6.5) #x轴范围，两侧对称才好看
+  ) +
+  #或用下面这行：
+  #xlim(c(xmin, xmax)) + 
+
+#画阈值分界线
+geom_vline(xintercept = c(-logFCcut, logFCcut), color="grey40", 
+           linetype="longdash", lwd = 0.1) + #虚线的形状和粗细
+geom_hline(yintercept = -log10(pvalCut), color="grey40", 
+           linetype="longdash", lwd = 0.1) +
+  
+theme_bw(base_size = 10 #, base_family = "Times" #修改字体
+         ) +
+theme(panel.grid=element_blank())
+
+p1 <- p1 + 
+geom_vline(xintercept = c(-logFCcut2, logFCcut2), color="grey40", 
+           linetype="longdash", lwd = 0.1) +
+geom_hline(yintercept = -log10(pvalCut2), color="grey40", 
+             linetype="longdash", lwd = 0.1)
+
+# 显示 logFC > n 的基因的基因名
+n = 2
+p1 + geom_text_repel(aes(x = logFC,
+                         y = -log10(P.Value), 
+                         label = ifelse(logFC > n & -log10(P.Value) > 5, rownames(x),"")),
+                     colour="#9c0917", size = 3, box.padding = unit(0.3, "lines"),
+                     point.padding = unit(0.01, "lines")) +
+  geom_text_repel(aes(x = logFC, 
+                      y = -log10(P.Value), 
+                      label = ifelse(logFC < -n & -log10(P.Value) > 5, rownames(x),"")),
+                  colour="#0054a3", size = 3, box.padding = unit(0.3, "lines"), 
+                  point.padding = unit(0.01, "lines"))
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/DE_Areg_volcano.pdf", width=6,height=6)
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/DE_Areg_volcano.png", width=6, height=6, dpi = 500)
+```
+
+## Bubble for DE_Areg_top
+```{r Bubble_EC_top}
+library(ggplot2)
+library(readxl)
+data <- read_excel("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/results/2024-07-17/Areg_DEGs.xlsx")
+colnames(data) <- c("ID","Symbol","P.value","LogFC")
+data <- data[order(data$LogFC, decreasing = FALSE),]
+data <- data[order(data$LogFC, decreasing = FALSE),]
+data <- rbind(data[1:20,],data[(nrow(data)-20):nrow(data),])
+
+# Convert Symbol to a factor to control the order of plotting
+data$ID <- factor(data$ID, levels = unique(data$ID)) 
+
+# Map shapes and colors based on LogFC
+data$Shape <- ifelse(data$LogFC > 0, 24, 25) # 24 for triangle up, 25 for triangle down
+data$Color <- ifelse(data$LogFC > 0, "#DA7680", "#72A7D9")
+data$Regulation <- factor(ifelse(data$LogFC > 0, "Up", "Down"),
+                          levels = c("Up", "Down"))
+
+# Plot
+ggplot(data, aes(x=LogFC, y=ID, size=-log10(P.value), shape=Regulation, color=Regulation)) +
+  geom_point(stroke= 1) +
+  scale_shape_manual(values = c("Up" = 24, "Down" = 25)) +
+  scale_color_manual(values = c("Up" = "#DA7680", "Down" = "#72A7D9")) +
+  theme_minimal() +
+  theme(panel.background = element_rect(fil="white"), 
+        panel.grid.major = element_line(color="lightgrey",size=0.1),
+        axis.text.x = element_text(size = 8, face = "bold"),
+        axis.text.y = element_text(size = 10, color="black",face = "bold"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")) +
+  labs(title="Significant DEGs in Aregs: Chow vs HFSC",
+       size = bquote(~-Log[10]~italic("P-value")),
+       x="LogFC", 
+       y="Gene Symbol",
+       color = "Gene Regulation",
+       shape = "Gene Regulation")+
+  scale_x_continuous(
+    limits = c(-6.1, 6.1)  #x轴范围，两侧对称才好看 
+  ) +
+  guides(size = guide_legend(override.aes = list(shape = 17)))
+
+# Save the plot
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/Areg_gex_plot.pdf", width=5, height=7, dpi=600)
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/Areg_gex_plot.png", width=5, height=7, dpi=600)
+```
+
+## Canonical Pathways
+```{r IPA_Areg_cano}
+data <- read_excel("./subset_ASPC/results/2024-07-17/Areg_pw_selected.xlsx")
+data <- data[order(data$`zScore`, decreasing = TRUE),]
+data$`Ingenuity Canonical Pathways` <- factor(data$`Ingenuity Canonical Pathways`, 
+                                              levels = rev(data$`Ingenuity Canonical Pathways`))
+
+data$Shape <- ifelse(data$zScore > 0, 24, ifelse(data$zScore < 0, 25, 21)) # 24 for triangle up, 25 for triangle down
+data$Regulation <- factor(ifelse(data$zScore > 0, "Up", ifelse(data$zScore < 0, "Down", "NA")), levels = c("Up", "Down","NA"))
+
+# Plot
+ggplot(data, aes(x=zScore, 
+                 y=`Ingenuity Canonical Pathways`, 
+                 size=Ratio*100, 
+                 shape=Regulation, 
+                 color=`-log(p-value)`)) +
+  geom_point(stroke= 1) +
+  scale_shape_manual(values = c("Up" = 24, "Down" = 25, "NA" = 21)) +
+  scale_color_gradient(low = "#A880CF",high = "#FEDD94") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fil="white"), 
+        panel.grid.major = element_line(color="lightgrey",size=0.1),
+        title = element_text(size = 12, face = "bold"),
+        axis.text.x = element_text(size = 8, color="black"),
+        axis.text.y = element_text(size = 10, color="black"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")) +
+  labs(title="Top Canonical Pathways in Aregs \n24-week HFSC Diet",
+       size = "Ratio(%)",
+       x="Z-score", 
+       y="Canonical Pathways",
+       color = bquote(~-log[10]~italic("P-value")),
+       shape = paste("Regulation", sep = "\n"))+
+  scale_x_continuous() +
+  scale_y_discrete(labels = label_wrap(levels(data$`Ingenuity Canonical Pathways`), width = 47))+
+  guides(size = guide_legend(override.aes = list(shape = 17)))
+ggsave("./subset_ASPC/Cano_Areg.pdf", width=7, height=6)
+```
+
+## Cano_ChordPlot
+```{r cano_chord}
+data <- read_excel("./subset_ASPC/results/2024-07-17/Areg_Chord_input.xlsx")
+colnames(data)[1] <- "Pathway"
+expr <- read_excel("./subset_ASPC/results/2024-07-17/Areg_DEGs.xlsx")
+colnames(expr)[4] <- "logFC"
+expr <- as.data.frame(expr)
+row.names(expr) <- expr$ID
+
+#转成关系对数据；
+dt <- pivot_longer(data,!Pathway, names_to = "index",
+                   values_to = "gene",
+                   values_drop_na = TRUE)
+
+# BiocManager::install("Hmisc") 转换基因名
+library(Hmisc)
+library(reshape2)
+library(GOplot)
+dt$gene <- str_to_title(dt$gene)
+#生成权重数值；
+n <- nrow(dt)
+dt$value <- rep(1,n)
+#去掉第2列,生成绘图数据；
+edge <- dt[-2]
+edge$Pathway <- factor(edge$Pathway, levels = (c(edge$Pathway) %>% unique()))
+#转成宽数据矩阵，用作绘图数据；
+mat <- acast(edge,gene~Pathway)
+#将NA替换为0；
+mat[is.na(mat)] <- 0
+#从表达量表格提取差异倍数数据；
+ind <- row.names(mat)
+logFC <- expr[ind,]$logFC
+ID <- expr[ind,]$ID
+#将logfc数据加入到矩阵中；
+mat2 <- data.frame(mat,ID,logFC)
+rownames(mat2) <- mat2$ID
+mat2 <- mat2 %>% dplyr::select(-ID)
+
+#自定义颜色；
+# mycol <- c("#9dacb3","#896f96","#003a6c","#db6000","#f2c76d","#0077c1","#d982ba","#5ea6a3")
+# mycol <- c("#ffaa00","#b37700","#ffd580","#ffeabf","#bfecff","#80d9ff","#005478","#0078ab")
+# mycol <- c("#FFC0C6","#FF5630","#FA6A10","#F88C35","#F2A816","#FDD070","#ADCF80","#60851A","#66CBCF","#B2F0FF","#1C98B9","#B6AAE3")
+mycol <- c("#FFC0C6","#FF5630","#F2A816","#ADCF80","#60851A","#66CBCF","#B2F0FF","#B6AAE3")
+# mycol <- c("#ffaa00","#b37700","#ffeabf","#80d9ff","#bfecff","#005478")
+#mycol <- c("#ffadad","#ffd6a5","#fdffb6","#caffbf","#9bf6ff","#a0c4ff","#bdb2ff","#ffc6ff")
+# mycol <- c("#7C4697","#5D90BA","#5ea6a3","#D8D155","#cf7685")
+#调整透明度；
+mycol1 <- alpha(mycol,0.9)
+
+#添加缝隙，根据log2FC进行排序，并指定渐变色；
+GOChord(mat2,
+        space = 0.02,
+        gene.size = 3,
+        process.label = 10,
+        border.size = 0,
+        ribbon.col = mycol1,
+        gene.order = 'logFC',
+        lfc.col=c('#de2128','white','#02a858'),
+        limit = c(1,0),
+        title = "Genes Significantly Impacting Pathways \nin Aregs after 24-week HFSC Diet") 
+ggsave("./subset_ASPC/Chord_Areg.pdf", width = 8, height = 9.8)
+```
+
+### Clustered DotPlot for subtypes
+```{r Clustered_DotPlot}
+genelist <- subset(mat2, select = -logFC)
+pathway_genes_named <- lapply(names(genelist), function(pathway) {
+  rownames(genelist)[genelist[[pathway]] == 1]
+})
+names(pathway_genes_named) <- names(genelist)
+# 查看结果
+print(pathway_genes_named)
+
+expr <- DE_Areg
+expr_filter <- expr[abs(expr$logFC) >= 2 & expr$P.Value < 0.01, ]
+pathway_genes_named_filtered <- lapply(pathway_genes_named, function(genes) {
+  intersect(genes, expr_filter$Gene)
+})
+all_genes <- unlist(pathway_genes_named_filtered)
+# 查看基因出现次数
+gene_counts <- table(all_genes)
+# 筛选出重复基因
+duplicated_genes <- names(gene_counts[gene_counts > 1])
+# 打印重复基因及其出现次数
+print(gene_counts[gene_counts > 1])
+
+seen_genes <- c()
+filtered_pathway_lists <- lapply(pathway_genes_named_filtered, function(genes) { # 遍历每个 pathway list，并根据优先级去重
+  unique_genes <- genes[!genes %in% seen_genes] # 筛选未见过的基因
+  seen_genes <<- c(seen_genes, unique_genes) # 更新已见基因集合
+  return(unique_genes)
+})
+levels(seurat.combined.sct.ASPC.new) <- c("RMP-HFSC","RMP-Chow","FAP-HFSC","FAP-Chow","PreA-HFSC","PreA-Chow","Areg-HFSC","Areg-Chow","ASC-HFSC","ASC-Chow")
+pdf(file=sprintf('./pathway_gene/ASPC/Top_drivers_Dotplot_Areg1.pdf'),width=10,height=5)
+p <- DotPlot(seurat.combined.sct.ASPC.new, 
+              features = filtered_pathway_lists, 
+              dot.scale = 8,
+              cols = "RdBu") +
+  RotatedAxis() +
+  theme(
+    panel.border = element_rect(color="black"), #面板边框
+    panel.spacing = unit(1, "mm"),
+    #strip.background = element_rect(color="red"),
+    strip.text = element_text(margin=margin(b=3, unit="mm")),
+    strip.placement = 'outlet', 
+    axis.line = element_blank(),
+  ) +
+  labs(x="", y="",title = "Top Driver Expression of the Areg Significant Pathway")
+print(p)
+cat("\n")
+dev.off()
+```
+
+# DE_FAP
+## Volcano for DE_FAP
+```{r Volcano_DE_MEC}
+DE_FAP<- read.csv("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/results/2024-07-17/DE_results_FAP-HFSC_vs_Chow.csv")
+head(DE_FAP) #gene p_val avg_log2FC pct.1 pct.2 p_val_adj
+colnames(DE_FAP)[1:3] <- c("Gene","P.Value","logFC","pct.1","pct.2","adjP.Value")
+rownames(DE_FAP) <- DE_FAP$Gene
+head(DE_FAP)
+x <- DE_FAP
+
+logFCcut <- 1 #log2-foldchange
+pvalCut <- 1e-2 #P.value
+adjPcut <- 0.1 #adj.P.value
+
+#for advanced mode
+logFCcut2 <- 2 
+logFCcut3 <- 5
+pvalCut2 <- 1e-10
+pvalCut3 <- 1e-20
+
+#置x，y軸的最大最小位置
+xmin <- (range(x$logFC)[1]- (range(x$logFC)[1]+ 10))
+xmax <- (range(x$logFC)[1]+ (10-range(x$logFC)[1]))
+ymin <- 0
+ymax <- -log10(sort(x$P.Value)[1]) * 1.1
+
+# 基因名的颜色，需大于等于pathway的数量，这里自定义了足够多的颜色
+mycol <- c("darkgreen","chocolate4","blueviolet","#223D6C","#D20A13","#088247","#58CDD9","#7A142C","#5D90BA","#431A3D","#91612D","#6E568C","#E0367A","#D8D155","#64495D","#7CC767")
+
+# 複雜的的setting for color
+n1 <- length(x[, 1])
+cols <- rep("grey", n1)
+names(cols)<- rownames(x)
+
+#不同阈值的点的颜色
+#cols[x$P.Value < pvalCut & x$logFC >logFCcut]<- "#FB9A99"
+#cols[x$P.Value < pvalCut2 & x$logFC > logFCcut2]<- "#ED4F4F"
+#cols[x$P.Value < pvalCut & x$logFC < -logFCcut]<- "#B2DF8A"
+#cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- "#329E3F"
+cols[x$P.Value < pvalCut & x$logFC >logFCcut]<- "#f77e7e"
+cols[x$P.Value < pvalCut2 & x$logFC >  logFCcut2]<- "#c21b2b"
+cols[x$P.Value < pvalCut & x$logFC < -logFCcut]<- "#73b6f5"
+cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- "#136cbf"
+color_transparent <- adjustcolor(cols, alpha.f = 0.5)
+x$color_transparent <- color_transparent
+
+# 複雜的的setting for size
+n1 <- length(x[, 1])
+size <- rep(1, n1)
+
+#不同阈值的点的大小
+size[x$P.Value < pvalCut & x$logFC > logFCcut]<- 2
+size[x$P.Value < pvalCut2 & x$logFC > logFCcut2]<- 4
+size[x$P.Value < pvalCut3 & x$logFC > logFCcut3]<- 6
+size[x$P.Value < pvalCut & x$logFC < -logFCcut]<- 2
+size[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- 4
+size[x$P.Value < pvalCut3 & x$logFC < -logFCcut3]<- 6
+
+# Construct the plot object
+#BiocManager::install('ggthemes')
+library(ggplot2)
+library(ggrepel)
+library(ggthemes)
+library(gridExtra)
+p1 <- ggplot(data=x, aes(logFC, -log10(P.Value), label = Gene, color = pathway)) +
+  geom_point(alpha = 0.6, size = size, colour = x$color_transparent) +
+
+  labs(x=bquote(~Log[2]~"(fold change)"), y=bquote(~-Log[10]~italic("P-value")), title="") + 
+  ylim(c(ymin,ymax)) + 
+  scale_x_continuous(
+    breaks = c(-5, -2,-logFCcut, 0, logFCcut, 2, 5), #刻度线的位置
+    labels = c(-5, -2, -logFCcut, 0, logFCcut, 2 , 5),
+    limits = c(-6.5, 6.5) #x轴范围，两侧对称才好看
+  ) +
+  #或用下面这行：
+  #xlim(c(xmin, xmax)) + 
+
+#画阈值分界线
+geom_vline(xintercept = c(-logFCcut, logFCcut), color="grey40", 
+           linetype="longdash", lwd = 0.1) + #虚线的形状和粗细
+geom_hline(yintercept = -log10(pvalCut), color="grey40", 
+           linetype="longdash", lwd = 0.1) +
+  
+theme_bw(base_size = 10 #, base_family = "Times" #修改字体
+         ) +
+theme(panel.grid=element_blank())
+
+p1 <- p1 + 
+geom_vline(xintercept = c(-logFCcut2, logFCcut2), color="grey40", 
+           linetype="longdash", lwd = 0.1) +
+geom_hline(yintercept = -log10(pvalCut2), color="grey40", 
+             linetype="longdash", lwd = 0.1)
+
+# 显示 logFC > n 的基因的基因名
+n = 2
+p1 + geom_text_repel(aes(x = logFC,
+                         y = -log10(P.Value), 
+                         label = ifelse(logFC > n & -log10(P.Value) > 5, rownames(x),"")),
+                     colour="#9c0917", size = 3, box.padding = unit(0.3, "lines"),
+                     point.padding = unit(0.01, "lines")) +
+  geom_text_repel(aes(x = logFC, 
+                      y = -log10(P.Value), 
+                      label = ifelse(logFC < -n & -log10(P.Value) > 5, rownames(x),"")),
+                  colour="#0054a3", size = 3, box.padding = unit(0.3, "lines"), 
+                  point.padding = unit(0.01, "lines"))
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/DE_FAP_volcano.pdf", width=6,height=6)
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/DE_FAP_volcano.png", width=6, height=6, dpi = 500)
+```
+
+## Bubble for DE_FAP_top
+```{r Bubble_EC_top}
+library(ggplot2)
+library(readxl)
+data <- read_excel("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/results/2024-07-17/FAP_DEGs.xlsx")
+colnames(data) <- c("ID","Symbol","P.value","LogFC")
+data <- data[order(data$LogFC, decreasing = FALSE),]
+data <- rbind(data[1:20,],data[(nrow(data)-20):nrow(data),])
+
+# Convert Symbol to a factor to control the order of plotting
+data$ID <- factor(data$ID, levels = unique(data$ID)) 
+
+# Map shapes and colors based on LogFC
+data$Shape <- ifelse(data$LogFC > 0, 24, 25) # 24 for triangle up, 25 for triangle down
+data$Color <- ifelse(data$LogFC > 0, "#DA7680", "#72A7D9")
+data$Regulation <- factor(ifelse(data$LogFC > 0, "Up", "Down"),
+                          levels = c("Up", "Down"))
+
+# Plot
+ggplot(data, aes(x=LogFC, y=ID, size=-log10(P.value), shape=Regulation, color=Regulation)) +
+  geom_point(stroke= 1) +
+  scale_shape_manual(values = c("Up" = 24, "Down" = 25)) +
+  scale_color_manual(values = c("Up" = "#DA7680", "Down" = "#72A7D9")) +
+  theme_minimal() +
+  theme(panel.background = element_rect(fil="white"), 
+        panel.grid.major = element_line(color="lightgrey",size=0.1),
+        axis.text.x = element_text(size = 8, face = "bold"),
+        axis.text.y = element_text(size = 10, color="black",face = "bold"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")) +
+  labs(title="Significant DEGs in FAPs: Chow vs HFSC",
+       size = bquote(~-Log[10]~italic("P-value")),
+       x="LogFC", 
+       y="Gene Symbol",
+       color = "Gene Regulation",
+       shape = "Gene Regulation")+
+  scale_x_continuous(
+    limits = c(-6.1, 6.1)  #x轴范围，两侧对称才好看 
+  ) +
+  guides(size = guide_legend(override.aes = list(shape = 17)))
+
+# Save the plot
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/FAP_gex_plot.pdf", width=5, height=7, dpi=600)
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/FAP_gex_plot.png", width=5, height=7, dpi=600)
+```
+
+## Canonical Pathways
+```{r IPA_FAP_cano}
+data <- read_excel("./subset_ASPC/results/2024-07-17/FAP_pw_selected.xlsx")
+data <- data[order(data$`zScore`, decreasing = TRUE),]
+data$`Ingenuity Canonical Pathways` <- factor(data$`Ingenuity Canonical Pathways`, 
+                                              levels = rev(data$`Ingenuity Canonical Pathways`))
+
+data$Shape <- ifelse(data$zScore > 0, 24, ifelse(data$zScore < 0, 25, 21)) # 24 for triangle up, 25 for triangle down
+data$Regulation <- factor(ifelse(data$zScore > 0, "Up", ifelse(data$zScore < 0, "Down", "NA")), levels = c("Up", "Down","NA"))
+
+# Plot
+ggplot(data, aes(x=zScore, 
+                 y=`Ingenuity Canonical Pathways`, 
+                 size=Ratio*100, 
+                 shape=Regulation, 
+                 color=`-log(p-value)`)) +
+  geom_point(stroke= 1) +
+  scale_shape_manual(values = c("Up" = 24, "Down" = 25, "NA" = 21)) +
+  scale_color_gradient(low = "#A880CF",high = "#FEDD94") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fil="white"), 
+        panel.grid.major = element_line(color="lightgrey",size=0.1),
+        title = element_text(size = 12, face = "bold"),
+        axis.text.x = element_text(size = 8, color="black"),
+        axis.text.y = element_text(size = 10, color="black"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")) +
+  labs(title="Top Canonical Pathways in FAPs \n24-week HFSC Diet",
+       size = "Ratio(%)",
+       x="Z-score", 
+       y="Canonical Pathways",
+       color = bquote(~-log[10]~italic("P-value")),
+       shape = paste("Regulation", sep = "\n"))+
+  scale_x_continuous() +
+  scale_y_discrete(labels = label_wrap(levels(data$`Ingenuity Canonical Pathways`), width = 47))+
+  guides(size = guide_legend(override.aes = list(shape = 17)))
+ggsave("./subset_ASPC/Cano_FAP.pdf", width=7, height=6)
+```
+
+## Cano_ChordPlot
+```{r cano_chord}
+data <- read_excel("./subset_ASPC/results/2024-07-17/FAP_Chord_input.xlsx")
+colnames(data)[1] <- "Pathway"
+expr <- read_excel("./subset_ASPC/results/2024-07-17/FAP_DEGs.xlsx")
+colnames(expr)[4] <- "logFC"
+expr <- as.data.frame(expr)
+row.names(expr) <- expr$ID
+
+#转成关系对数据；
+dt <- pivot_longer(data,!Pathway, names_to = "index",
+                   values_to = "gene",
+                   values_drop_na = TRUE)
+
+# BiocManager::install("Hmisc") 转换基因名
+library(Hmisc)
+library(reshape2)
+library(GOplot)
+dt$gene <- str_to_title(dt$gene)
+#生成权重数值；
+n <- nrow(dt)
+dt$value <- rep(1,n)
+#去掉第2列,生成绘图数据；
+edge <- dt[-2]
+edge$Pathway <- factor(edge$Pathway, levels = (c(edge$Pathway) %>% unique()))
+#转成宽数据矩阵，用作绘图数据；
+mat <- acast(edge,gene~Pathway)
+#将NA替换为0；
+mat[is.na(mat)] <- 0
+#从表达量表格提取差异倍数数据；
+ind <- row.names(mat)
+logFC <- expr[ind,]$logFC
+ID <- expr[ind,]$ID
+#将logfc数据加入到矩阵中；
+mat2 <- data.frame(mat,ID,logFC)
+rownames(mat2) <- mat2$ID
+mat2 <- mat2 %>% dplyr::select(-ID)
+
+#自定义颜色；
+# mycol <- c("#9dacb3","#896f96","#003a6c","#db6000","#f2c76d","#0077c1","#d982ba","#5ea6a3")
+# mycol <- c("#ffaa00","#b37700","#ffd580","#ffeabf","#bfecff","#80d9ff","#005478","#0078ab")
+# mycol <- c("#FFC0C6","#FF5630","#FA6A10","#F88C35","#F2A816","#FDD070","#ADCF80","#60851A","#66CBCF","#B2F0FF","#1C98B9","#B6AAE3")
+mycol <- c("#FFC0C6","#FF5630","#F2A816","#ADCF80","#60851A","#66CBCF","#B2F0FF","#B6AAE3")
+# mycol <- c("#ffaa00","#b37700","#ffeabf","#80d9ff","#bfecff","#005478")
+#mycol <- c("#ffadad","#ffd6a5","#fdffb6","#caffbf","#9bf6ff","#a0c4ff","#bdb2ff","#ffc6ff")
+# mycol <- c("#7C4697","#5D90BA","#5ea6a3","#D8D155","#cf7685")
+#调整透明度；
+mycol1 <- alpha(mycol,0.9)
+
+#添加缝隙，根据log2FC进行排序，并指定渐变色；
+GOChord(mat2,
+        space = 0.02,
+        gene.size = 3,
+        process.label = 10,
+        border.size = 0,
+        ribbon.col = mycol1,
+        gene.order = 'logFC',
+        lfc.col=c('#de2128','white','#02a858'),
+        limit = c(1,0),
+        title = "Genes Significantly Impacting Pathways \nin FAPs after 24-week HFSC Diet") 
+ggsave("./subset_ASPC/Chord_FAP.pdf", width = 8, height = 9.8)
+``` 
+### Clustered DotPlot for subtypes
+```{r Clustered_DotPlot}
+genelist <- subset(mat2, select = -logFC)
+pathway_genes_named <- lapply(names(genelist), function(pathway) {
+  rownames(genelist)[genelist[[pathway]] == 1]
+})
+names(pathway_genes_named) <- names(genelist)
+# 查看结果
+print(pathway_genes_named)
+
+expr <- DE_FAP
+expr_filter <- expr[abs(expr$logFC) >= 2 & expr$P.Value < 0.01, ]
+pathway_genes_named_filtered <- lapply(pathway_genes_named, function(genes) {
+  intersect(genes, expr_filter$Gene)
+})
+all_genes <- unlist(pathway_genes_named_filtered)
+# 查看基因出现次数
+gene_counts <- table(all_genes)
+# 筛选出重复基因
+duplicated_genes <- names(gene_counts[gene_counts > 1])
+# 打印重复基因及其出现次数
+print(gene_counts[gene_counts > 1])
+
+
+seen_genes <- c()
+filtered_pathway_lists <- lapply(pathway_genes_named_filtered, function(genes) { # 遍历每个 pathway list，并根据优先级去重
+  unique_genes <- genes[!genes %in% seen_genes] # 筛选未见过的基因
+  seen_genes <<- c(seen_genes, unique_genes) # 更新已见基因集合
+  return(unique_genes)
+})
+
+#filtered_pathway_lists_cd74 <- append(filtered_pathway_lists, list("Antigen Presentation Pathway"="Cd74"))
+
+levels(seurat.combined.sct.ASPC.new) <- c("RMP-HFSC","RMP-Chow","FAP-HFSC","FAP-Chow","PreA-HFSC","PreA-Chow","Areg-HFSC","Areg-Chow","FAP-HFSC","FAP-Chow")
+pdf(file=sprintf('./pathway_gene/ASPC/Top_drivers_Dotplot_FAP1.pdf'),width=10,height=5)
+p <- DotPlot(seurat.combined.sct.ASPC.new, 
+              features = filtered_pathway_lists, 
+              dot.scale = 8,
+              cols = "RdBu") +
+  RotatedAxis() +
+  theme(
+    panel.border = element_rect(color="black"), #面板边框
+    panel.spacing = unit(1, "mm"),
+    #strip.background = element_rect(color="red"),
+    strip.text = element_text(margin=margin(b=3, unit="mm")),
+    strip.placement = 'outlet', 
+    axis.line = element_blank(),
+  ) +
+  labs(x="", y="",title = "Top Driver Expression of the FAP Significant Pathway")
+print(p)
+cat("\n")
+dev.off()
+```
+
+# DE_ASC
+## Volcano for DE_ASC
+```{r Volcano_DE_MEC}
+DE_ASC<- read.csv("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/results/2024-07-17/DE_results_ASC-HFSC_vs_Chow.csv")
+head(DE_ASC) #gene p_val avg_log2FC pct.1 pct.2 p_val_adj
+colnames(DE_ASC)[1:3] <- c("Gene","P.Value","logFC","pct.1","pct.2","adjP.Value")
+rownames(DE_ASC) <- DE_ASC$Gene
+head(DE_ASC)
+x <- DE_ASC
+
+logFCcut <- 1 #log2-foldchange
+pvalCut <- 1e-2 #P.value
+adjPcut <- 0.1 #adj.P.value
+
+#for advanced mode
+logFCcut2 <- 2 
+logFCcut3 <- 5
+pvalCut2 <- 1e-10
+pvalCut3 <- 1e-20
+
+#置x，y軸的最大最小位置
+xmin <- (range(x$logFC)[1]- (range(x$logFC)[1]+ 10))
+xmax <- (range(x$logFC)[1]+ (10-range(x$logFC)[1]))
+ymin <- 0
+ymax <- -log10(sort(x$P.Value)[1]) * 1.1
+
+# 基因名的颜色，需大于等于pathway的数量，这里自定义了足够多的颜色
+mycol <- c("darkgreen","chocolate4","blueviolet","#223D6C","#D20A13","#088247","#58CDD9","#7A142C","#5D90BA","#431A3D","#91612D","#6E568C","#E0367A","#D8D155","#64495D","#7CC767")
+
+# 複雜的的setting for color
+n1 <- length(x[, 1])
+cols <- rep("grey", n1)
+names(cols)<- rownames(x)
+
+#不同阈值的点的颜色
+#cols[x$P.Value < pvalCut & x$logFC >logFCcut]<- "#FB9A99"
+#cols[x$P.Value < pvalCut2 & x$logFC > logFCcut2]<- "#ED4F4F"
+#cols[x$P.Value < pvalCut & x$logFC < -logFCcut]<- "#B2DF8A"
+#cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- "#329E3F"
+cols[x$P.Value < pvalCut & x$logFC >logFCcut]<- "#f77e7e"
+cols[x$P.Value < pvalCut2 & x$logFC >  logFCcut2]<- "#c21b2b"
+cols[x$P.Value < pvalCut & x$logFC < -logFCcut]<- "#73b6f5"
+cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- "#136cbf"
+color_transparent <- adjustcolor(cols, alpha.f = 0.5)
+x$color_transparent <- color_transparent
+
+# 複雜的的setting for size
+n1 <- length(x[, 1])
+size <- rep(1, n1)
+
+#不同阈值的点的大小
+size[x$P.Value < pvalCut & x$logFC > logFCcut]<- 2
+size[x$P.Value < pvalCut2 & x$logFC > logFCcut2]<- 4
+size[x$P.Value < pvalCut3 & x$logFC > logFCcut3]<- 6
+size[x$P.Value < pvalCut & x$logFC < -logFCcut]<- 2
+size[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- 4
+size[x$P.Value < pvalCut3 & x$logFC < -logFCcut3]<- 6
+
+# Construct the plot object
+#BiocManager::install('ggthemes')
+library(ggplot2)
+library(ggrepel)
+library(ggthemes)
+library(gridExtra)
+p1 <- ggplot(data=x, aes(logFC, -log10(P.Value), label = Gene, color = pathway)) +
+  geom_point(alpha = 0.6, size = size, colour = x$color_transparent) +
+
+  labs(x=bquote(~Log[2]~"(fold change)"), y=bquote(~-Log[10]~italic("P-value")), title="") + 
+  ylim(c(ymin,ymax)) + 
+  scale_x_continuous(
+    breaks = c(-5, -2,-logFCcut, 0, logFCcut, 2, 5), #刻度线的位置
+    labels = c(-5, -2, -logFCcut, 0, logFCcut, 2 , 5),
+    limits = c(-6.5, 6.5) #x轴范围，两侧对称才好看
+  ) +
+  #或用下面这行：
+  #xlim(c(xmin, xmax)) + 
+
+#画阈值分界线
+geom_vline(xintercept = c(-logFCcut, logFCcut), color="grey40", 
+           linetype="longdash", lwd = 0.1) + #虚线的形状和粗细
+geom_hline(yintercept = -log10(pvalCut), color="grey40", 
+           linetype="longdash", lwd = 0.1) +
+  
+theme_bw(base_size = 10 #, base_family = "Times" #修改字体
+         ) +
+theme(panel.grid=element_blank())
+
+p1 <- p1 + 
+geom_vline(xintercept = c(-logFCcut2, logFCcut2), color="grey40", 
+           linetype="longdash", lwd = 0.1) +
+geom_hline(yintercept = -log10(pvalCut2), color="grey40", 
+             linetype="longdash", lwd = 0.1)
+
+# 显示 logFC > n 的基因的基因名
+n = 2
+p1 + geom_text_repel(aes(x = logFC,
+                         y = -log10(P.Value), 
+                         label = ifelse(logFC > n & -log10(P.Value) > 5, rownames(x),"")),
+                     colour="#9c0917", size = 3, box.padding = unit(0.3, "lines"),
+                     point.padding = unit(0.01, "lines")) +
+  geom_text_repel(aes(x = logFC, 
+                      y = -log10(P.Value), 
+                      label = ifelse(logFC < -n & -log10(P.Value) > 5, rownames(x),"")),
+                  colour="#0054a3", size = 3, box.padding = unit(0.3, "lines"), 
+                  point.padding = unit(0.01, "lines"))
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/DE_ASC_volcano.pdf", width=6,height=6)
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/DE_ASC_volcano.png", width=6, height=6, dpi = 500)
+```
+
+## Bubble for DE_ASC_top
+```{r Bubble_ASC_top}
+library(ggplot2)
+library(readxl)
+data <- read_excel("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/results/2024-07-17/ASC_DEGs.xlsx")
+colnames(data) <- c("ID","Symbol","P.value","LogFC")
+data <- data[order(data$LogFC, decreasing = FALSE),]
+data <- data[order(data$LogFC, decreasing = FALSE),]
+data <- rbind(data[1:20,],data[(nrow(data)-20):nrow(data),])
+
+# Convert Symbol to a factor to control the order of plotting
+data$ID <- factor(data$ID, levels = unique(data$ID)) 
+
+# Map shapes and colors based on LogFC
+data$Shape <- ifelse(data$LogFC > 0, 24, 25) # 24 for triangle up, 25 for triangle down
+data$Color <- ifelse(data$LogFC > 0, "#DA7680", "#72A7D9")
+data$Regulation <- factor(ifelse(data$LogFC > 0, "Up", "Down"),
+                          levels = c("Up", "Down"))
+
+# Plot
+ggplot(data, aes(x=LogFC, y=ID, size=-log10(P.value), shape=Regulation, color=Regulation)) +
+  geom_point(stroke= 1) +
+  scale_shape_manual(values = c("Up" = 24, "Down" = 25)) +
+  scale_color_manual(values = c("Up" = "#DA7680", "Down" = "#72A7D9")) +
+  theme_minimal() +
+  theme(panel.background = element_rect(fil="white"), 
+        panel.grid.major = element_line(color="lightgrey",size=0.1),
+        axis.text.x = element_text(size = 8, face = "bold"),
+        axis.text.y = element_text(size = 10, color="black",face = "bold"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")) +
+  labs(title="Significant DEGs in ASCs: Chow vs HFSC",
+       size = bquote(~-Log[10]~italic("P-value")),
+       x="LogFC", 
+       y="Gene Symbol",
+       color = "Gene Regulation",
+       shape = "Gene Regulation")+
+  scale_x_continuous(
+    limits = c(-5.7, 5.7)  #x轴范围，两侧对称才好看 
+  ) +
+  guides(size = guide_legend(override.aes = list(shape = 17)))
+
+# Save the plot
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/ASC_gex_plot.pdf", width=5, height=7, dpi=600)
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/ASC_gex_plot.png", width=5, height=7, dpi=600)
+```
+
+## Canonical Pathways
+```{r IPA_ASC_cano}
+data <- read_excel("./subset_ASPC/results/2024-07-17/ASC_pw_selected.xlsx")
+data <- data[order(data$`zScore`, decreasing = TRUE),]
+data$`Ingenuity Canonical Pathways` <- factor(data$`Ingenuity Canonical Pathways`, 
+                                              levels = rev(data$`Ingenuity Canonical Pathways`))
+
+data$Shape <- ifelse(data$zScore > 0, 24, ifelse(data$zScore < 0, 25, 21)) # 24 for triangle up, 25 for triangle down
+data$Regulation <- factor(ifelse(data$zScore > 0, "Up", ifelse(data$zScore < 0, "Down", "NA")), levels = c("Up", "Down","NA"))
+
+# Plot
+ggplot(data, aes(x=zScore, 
+                 y=`Ingenuity Canonical Pathways`, 
+                 size=Ratio*100, 
+                 shape=Regulation, 
+                 color=`-log(p-value)`)) +
+  geom_point(stroke= 1) +
+  scale_shape_manual(values = c("Up" = 24, "Down" = 25, "NA" = 21)) +
+  scale_color_gradient(low = "#A880CF",high = "#FEDD94") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fil="white"), 
+        panel.grid.major = element_line(color="lightgrey",size=0.1),
+        title = element_text(size = 12, face = "bold"),
+        axis.text.x = element_text(size = 8, color="black"),
+        axis.text.y = element_text(size = 10, color="black"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")) +
+  labs(title="Top Canonical Pathways in ASCs \n24-week HFSC Diet",
+       size = "Ratio(%)",
+       x="Z-score", 
+       y="Canonical Pathways",
+       color = bquote(~-log[10]~italic("P-value")),
+       shape = paste("Regulation", sep = "\n"))+
+  scale_x_continuous() +
+  scale_y_discrete(labels = label_wrap(levels(data$`Ingenuity Canonical Pathways`), width = 47))+
+  guides(size = guide_legend(override.aes = list(shape = 17)))
+ggsave("./subset_ASPC/Cano_ASC.pdf", width=7, height=6)
+```
+
+## Cano_ChordPlot
+```{r cano_chord}
+data <- read_excel("./subset_ASPC/results/2024-07-17/ASC_Chord_input.xlsx")
+colnames(data)[1] <- "Pathway"
+expr <- read_excel("./subset_ASPC/results/2024-07-17/ASC_DEGs.xlsx")
+colnames(expr)[4] <- "logFC"
+expr <- as.data.frame(expr)
+row.names(expr) <- expr$ID
+
+#转成关系对数据；
+dt <- pivot_longer(data,!Pathway, names_to = "index",
+                   values_to = "gene",
+                   values_drop_na = TRUE)
+
+# BiocManager::install("Hmisc") 转换基因名
+library(Hmisc)
+library(reshape2)
+library(GOplot)
+dt$gene <- str_to_title(dt$gene)
+#生成权重数值；
+n <- nrow(dt)
+dt$value <- rep(1,n)
+#去掉第2列,生成绘图数据；
+edge <- dt[-2]
+edge$Pathway <- factor(edge$Pathway, levels = (c(edge$Pathway) %>% unique()))
+#转成宽数据矩阵，用作绘图数据；
+mat <- acast(edge,gene~Pathway)
+#将NA替换为0；
+mat[is.na(mat)] <- 0
+#从表达量表格提取差异倍数数据；
+ind <- row.names(mat)
+logFC <- expr[ind,]$logFC
+ID <- expr[ind,]$ID
+#将logfc数据加入到矩阵中；
+mat2 <- data.frame(mat,ID,logFC)
+rownames(mat2) <- mat2$ID
+mat2 <- mat2 %>% dplyr::select(-ID)
+
+#自定义颜色；
+# mycol <- c("#9dacb3","#896f96","#003a6c","#db6000","#f2c76d","#0077c1","#d982ba","#5ea6a3")
+# mycol <- c("#ffaa00","#b37700","#ffd580","#ffeabf","#bfecff","#80d9ff","#005478","#0078ab")
+mycol <- c("#FFC0C6","#FF5630","#F2A816","#ADCF80","#60851A","#66CBCF","#B2F0FF","#B6AAE3")
+# mycol <- c("#ffaa00","#b37700","#ffeabf","#80d9ff","#bfecff","#005478")
+#mycol <- c("#ffadad","#ffd6a5","#fdffb6","#caffbf","#9bf6ff","#a0c4ff","#bdb2ff","#ffc6ff")
+# mycol <- c("#7C4697","#5D90BA","#5ea6a3","#D8D155","#cf7685")
+#调整透明度；
+mycol1 <- alpha(mycol,0.9)
+
+#添加缝隙，根据log2FC进行排序，并指定渐变色；
+GOChord(mat2,
+        space = 0.02,
+        gene.size = 3,
+        process.label = 10,
+        border.size = 0,
+        ribbon.col = mycol1,
+        gene.order = 'logFC',
+        lfc.col=c('#de2128','white','#02a858'),
+        limit = c(1,0),
+        title = "Genes Significantly Impacting Pathways \nin ASCs after 24-week HFSC Diet") 
+ggsave("./subset_ASPC/Chord_ASC.pdf", width = 8, height = 9.8)
+``` 
+### Clustered DotPlot for subtypes
+```{r Clustered_DotPlot}
+genelist <- subset(mat2, select = -logFC)
+pathway_genes_named <- lapply(names(genelist), function(pathway) {
+  rownames(genelist)[genelist[[pathway]] == 1]
+})
+names(pathway_genes_named) <- names(genelist)
+# 查看结果
+print(pathway_genes_named)
+
+expr <- DE_ASC
+expr_filter <- expr[abs(expr$logFC) >= 2 & expr$P.Value < 0.01, ]
+pathway_genes_named_filtered <- lapply(pathway_genes_named, function(genes) {
+  intersect(genes, expr_filter$Gene)
+})
+all_genes <- unlist(pathway_genes_named_filtered)
+# 查看基因出现次数
+gene_counts <- table(all_genes)
+# 筛选出重复基因
+duplicated_genes <- names(gene_counts[gene_counts > 1])
+# 打印重复基因及其出现次数
+print(gene_counts[gene_counts > 1])
+
+
+seen_genes <- c()
+filtered_pathway_lists <- lapply(pathway_genes_named_filtered, function(genes) { # 遍历每个 pathway list，并根据优先级去重
+  unique_genes <- genes[!genes %in% seen_genes] # 筛选未见过的基因
+  seen_genes <<- c(seen_genes, unique_genes) # 更新已见基因集合
+  return(unique_genes)
+})
+
+#filtered_pathway_lists_cd74 <- append(filtered_pathway_lists, list("Antigen Presentation Pathway"="Cd74"))
+
+levels(seurat.combined.sct.ASPC.new) <- c("RMP-HFSC","RMP-Chow","FAP-HFSC","FAP-Chow","PreA-HFSC","PreA-Chow","Areg-HFSC","Areg-Chow","ASC-HFSC","ASC-Chow")
+pdf(file=sprintf('./pathway_gene/ASPC/Top_drivers_Dotplot_ASC1.pdf'),width=10,height=5)
+p <- DotPlot(seurat.combined.sct.ASPC.new, 
+              features = filtered_pathway_lists, 
+              dot.scale = 8,
+              cols = "RdBu") +
+  RotatedAxis() +
+  theme(
+    panel.border = element_rect(color="black"), #面板边框
+    panel.spacing = unit(1, "mm"),
+    #strip.background = element_rect(color="red"),
+    strip.text = element_text(margin=margin(b=3, unit="mm")),
+    strip.placement = 'outlet', 
+    axis.line = element_blank(),
+  ) +
+  labs(x="", y="",title = "Top Driver Expression of the ASC Significant Pathway")
+print(p)
+cat("\n")
+dev.off()
+```
+
+# Canonical Pathway Comparison
+```{r comparison}
+library("tidyr")
+library("readxl")
+getwd()
+data <- read_xlsx('./subset_ASPC/results/2024-07-17/comparison_selected.xlsx')
+colnames(data) <- c("Pathway","ASC", "FAP", "Areg", "ASC.p", "FAP.p", "Areg.p")
+
+data[data=="N/A"] <- NA
+data$Pathway <- reorder(data$Pathway, data$ASC, decreasing = F)
+data <- data[order(reorder(data$Pathway, data$ASC, decreasing = F)),]
+#data <- data[c(1:5,25:29),]
+mydata1<-gather(data[,1:4], Group, `z.score`,-1)
+mydata2<-gather(data[,c(1,5:7)], Group, `-logP`,-1)
+mydata <- cbind(mydata1,`-logP`=mydata2$`-logP`)
+#mydata$Group <- c(rep("ASC",40),rep("FAP",40), rep("Areg",40))
+mydata$Group<-factor(mydata1$Group, levels=c("ASC", "FAP", "Areg"), ordered=T)
+
+ggplot(mydata, aes(x=Group,y=Pathway,z.score))+
+  geom_vline(aes(Group, Pathway, xintercept = 1:nrow(mydata)),size=15,colour="grey100",alpha=.5)+
+  geom_vline(aes(Group, Pathway, xintercept = 1:nrow(mydata)),linetype="dashed",size=0.2)+
+  geom_point(aes(Group, Pathway, size=`-logP`,color=as.numeric(z.score)))+
+  scale_size_area(max_size=10)+
+  scale_color_gradient2(high = "brown", mid = "blanchedalmond", low = "lightseagreen", na.value="grey90")+
+  theme(axis.text.x = element_text(angle = -45, hjust = 0.5, vjust =0.5))+
+  scale_y_discrete(labels = label_wrap(levels(data$Pathway), width = 50))+
+  labs(x = "Group", 
+       y = "Function Annotation",
+       size = "-logP.value",
+       color = "Z-score") 
+ggsave("./subset_ASPC/results/ASC_FAP_Areg_comparison.pdf", width = 6, height = 6)
+```
+
+# DE_PreA
+## Volcano for DE_PreA
+```{r Volcano_DE_PreA}
+DE_PreA<- read.csv("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/results/2024-07-17/DE_results_PreA-HFSC_vs_Chow.csv")
+head(DE_PreA) #gene p_val avg_log2FC pct.1 pct.2 p_val_adj
+colnames(DE_PreA)[1:3] <- c("Gene","P.Value","logFC","pct.1","pct.2","adjP.Value")
+rownames(DE_PreA) <- DE_PreA$Gene
+head(DE_PreA)
+x <- DE_PreA
+
+logFCcut <- 1 #log2-foldchange
+pvalCut <- 1e-2 #P.value
+adjPcut <- 0.1 #adj.P.value
+
+#for advanced mode
+logFCcut2 <- 2 
+logFCcut3 <- 5
+pvalCut2 <- 1e-10
+pvalCut3 <- 1e-20
+
+#置x，y軸的最大最小位置
+xmin <- (range(x$logFC)[1]- (range(x$logFC)[1]+ 10))
+xmax <- (range(x$logFC)[1]+ (10-range(x$logFC)[1]))
+ymin <- 0
+ymax <- -log10(sort(x$P.Value)[1]) * 1.1
+
+# 基因名的颜色，需大于等于pathway的数量，这里自定义了足够多的颜色
+mycol <- c("darkgreen","chocolate4","blueviolet","#223D6C","#D20A13","#088247","#58CDD9","#7A142C","#5D90BA","#431A3D","#91612D","#6E568C","#E0367A","#D8D155","#64495D","#7CC767")
+
+# 複雜的的setting for color
+n1 <- length(x[, 1])
+cols <- rep("grey", n1)
+names(cols)<- rownames(x)
+
+#不同阈值的点的颜色
+#cols[x$P.Value < pvalCut & x$logFC >logFCcut]<- "#FB9A99"
+#cols[x$P.Value < pvalCut2 & x$logFC > logFCcut2]<- "#ED4F4F"
+#cols[x$P.Value < pvalCut & x$logFC < -logFCcut]<- "#B2DF8A"
+#cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- "#329E3F"
+cols[x$P.Value < pvalCut & x$logFC >logFCcut]<- "#f77e7e"
+cols[x$P.Value < pvalCut2 & x$logFC >  logFCcut2]<- "#c21b2b"
+cols[x$P.Value < pvalCut & x$logFC < -logFCcut]<- "#73b6f5"
+cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- "#136cbf"
+color_transparent <- adjustcolor(cols, alpha.f = 0.5)
+x$color_transparent <- color_transparent
+
+# 複雜的的setting for size
+n1 <- length(x[, 1])
+size <- rep(1, n1)
+
+#不同阈值的点的大小
+size[x$P.Value < pvalCut & x$logFC > logFCcut]<- 2
+size[x$P.Value < pvalCut2 & x$logFC > logFCcut2]<- 4
+size[x$P.Value < pvalCut3 & x$logFC > logFCcut3]<- 6
+size[x$P.Value < pvalCut & x$logFC < -logFCcut]<- 2
+size[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- 4
+size[x$P.Value < pvalCut3 & x$logFC < -logFCcut3]<- 6
+
+# Construct the plot object
+#BiocManager::install('ggthemes')
+library(ggplot2)
+library(ggrepel)
+library(ggthemes)
+library(gridExtra)
+p1 <- ggplot(data=x, aes(logFC, -log10(P.Value), label = Gene, color = pathway)) +
+  geom_point(alpha = 0.6, size = size, colour = x$color_transparent) +
+
+  labs(x=bquote(~Log[2]~"(fold change)"), y=bquote(~-Log[10]~italic("P-value")), title="") + 
+  ylim(c(ymin,ymax)) + 
+  scale_x_continuous(
+    breaks = c(-5, -2,-logFCcut, 0, logFCcut, 2, 5), #刻度线的位置
+    labels = c(-5, -2, -logFCcut, 0, logFCcut, 2 , 5),
+    limits = c(-6.5, 6.5) #x轴范围，两侧对称才好看
+  ) +
+  #或用下面这行：
+  #xlim(c(xmin, xmax)) + 
+
+#画阈值分界线
+geom_vline(xintercept = c(-logFCcut, logFCcut), color="grey40", 
+           linetype="longdash", lwd = 0.1) + #虚线的形状和粗细
+geom_hline(yintercept = -log10(pvalCut), color="grey40", 
+           linetype="longdash", lwd = 0.1) +
+  
+theme_bw(base_size = 10 #, base_family = "Times" #修改字体
+         ) +
+theme(panel.grid=element_blank())
+
+p1 <- p1 + 
+geom_vline(xintercept = c(-logFCcut2, logFCcut2), color="grey40", 
+           linetype="longdash", lwd = 0.1) +
+geom_hline(yintercept = -log10(pvalCut2), color="grey40", 
+             linetype="longdash", lwd = 0.1)
+
+# 显示 logFC > n 的基因的基因名
+n = 2
+p1 + geom_text_repel(aes(x = logFC,
+                         y = -log10(P.Value), 
+                         label = ifelse(logFC > n & -log10(P.Value) > 5, rownames(x),"")),
+                     colour="#9c0917", size = 3, box.padding = unit(0.3, "lines"),
+                     point.padding = unit(0.01, "lines")) +
+  geom_text_repel(aes(x = logFC, 
+                      y = -log10(P.Value), 
+                      label = ifelse(logFC < -n & -log10(P.Value) > 5, rownames(x),"")),
+                  colour="#0054a3", size = 3, box.padding = unit(0.3, "lines"), 
+                  point.padding = unit(0.01, "lines"))
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/DE_PreA_volcano.pdf", width=6,height=6)
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/DE_PreA_volcano.png", width=6, height=6, dpi = 500)
+```
+
+## Bubble for DE_PreA_top
+```{r Bubble_PreA_top}
+library(ggplot2)
+library(readxl)
+data <- read_excel("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/results/2024-07-17/PreA_DEGs.xlsx")
+colnames(data) <- c("ID","Symbol","P.value","LogFC")
+data <- data[order(data$LogFC, decreasing = FALSE),]
+data <- data[order(data$LogFC, decreasing = FALSE),]
+data <- rbind(data[1:20,],data[(nrow(data)-20):nrow(data),])
+
+# Convert Symbol to a factor to control the order of plotting
+data$ID <- factor(data$ID, levels = unique(data$ID)) 
+
+# Map shapes and colors based on LogFC
+data$Shape <- ifelse(data$LogFC > 0, 24, 25) # 24 for triangle up, 25 for triangle down
+data$Color <- ifelse(data$LogFC > 0, "#DA7680", "#72A7D9")
+data$Regulation <- factor(ifelse(data$LogFC > 0, "Up", "Down"),
+                          levels = c("Up", "Down"))
+
+# Plot
+ggplot(data, aes(x=LogFC, y=ID, size=-log10(P.value), shape=Regulation, color=Regulation)) +
+  geom_point(stroke= 1) +
+  scale_shape_manual(values = c("Up" = 24, "Down" = 25)) +
+  scale_color_manual(values = c("Up" = "#DA7680", "Down" = "#72A7D9")) +
+  theme_minimal() +
+  theme(panel.background = element_rect(fil="white"), 
+        panel.grid.major = element_line(color="lightgrey",size=0.1),
+        axis.text.x = element_text(size = 8, face = "bold"),
+        axis.text.y = element_text(size = 10, color="black",face = "bold"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")) +
+  labs(title="Significant DEGs in PreAs: Chow vs HFSC",
+       size = bquote(~-Log[10]~italic("P-value")),
+       x="LogFC", 
+       y="Gene Symbol",
+       color = "Gene Regulation",
+       shape = "Gene Regulation")+
+  scale_x_continuous(
+    limits = c(-8, 8)  #x轴范围，两侧对称才好看 
+  ) +
+  guides(size = guide_legend(override.aes = list(shape = 17)))
+
+# Save the plot
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/PreA_gex_plot.pdf", width=5, height=7, dpi=600)
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/PreA_gex_plot.png", width=5, height=7, dpi=600)
+```
+
+## Canonical Pathways
+```{r IPA_PreA_cano}
+data <- read_excel("./subset_ASPC/results/2024-07-17/PreA_pw_selected.xlsx")
+data <- data[order(data$`zScore`, decreasing = TRUE),]
+data$`Ingenuity Canonical Pathways` <- factor(data$`Ingenuity Canonical Pathways`, 
+                                              levels = rev(data$`Ingenuity Canonical Pathways`))
+
+data$Shape <- ifelse(data$zScore > 0, 24, ifelse(data$zScore < 0, 25, 21)) # 24 for triangle up, 25 for triangle down
+data$Regulation <- factor(ifelse(data$zScore > 0, "Up", ifelse(data$zScore < 0, "Down", "NA")), levels = c("Up", "Down","NA"))
+
+# Plot
+ggplot(data, aes(x=zScore, 
+                 y=`Ingenuity Canonical Pathways`, 
+                 size=Ratio*100, 
+                 shape=Regulation, 
+                 color=`-log(p-value)`)) +
+  geom_point(stroke= 1) +
+  scale_shape_manual(values = c("Up" = 24, "Down" = 25, "NA" = 21)) +
+  scale_color_gradient(low = "#A880CF",high = "#FEDD94") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fil="white"), 
+        panel.grid.major = element_line(color="lightgrey",size=0.1),
+        title = element_text(size = 12, face = "bold"),
+        axis.text.x = element_text(size = 8, color="black"),
+        axis.text.y = element_text(size = 10, color="black"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")) +
+  labs(title="Top Canonical Pathways in PreAs \n24-week HFSC Diet",
+       size = "Ratio(%)",
+       x="Z-score", 
+       y="Canonical Pathways",
+       color = bquote(~-log[10]~italic("P-value")),
+       shape = paste("Regulation", sep = "\n"))+
+  scale_x_continuous() +
+  scale_y_discrete(labels = label_wrap(levels(data$`Ingenuity Canonical Pathways`), width = 47))+
+  guides(size = guide_legend(override.aes = list(shape = 17)))
+ggsave("./subset_ASPC/Cano_PreA.pdf", width=7, height=6)
+```
+
+## Cano_ChordPlot
+```{r cano_chord}
+data <- read_excel("./subset_ASPC/results/2024-07-17/PreA_Chord_input.xlsx")
+colnames(data)[1] <- "Pathway"
+expr <- read.csv("./subset_ASPC/results/2024-07-17/DE_results_PreA-HFSC_vs_Chow.csv")
+colnames(expr)[1] <- "ID"
+colnames(expr)[3] <- "logFC"
+expr <- as.data.frame(expr)
+row.names(expr) <- expr$ID
+
+#转成关系对数据；
+dt <- pivot_longer(data,!Pathway, names_to = "index",
+                   values_to = "gene",
+                   values_drop_na = TRUE)
+
+# BiocManager::install("Hmisc") 转换基因名
+library(Hmisc)
+library(reshape2)
+library(GOplot)
+dt$gene <- str_to_title(dt$gene)
+#生成权重数值；
+n <- nrow(dt)
+dt$value <- rep(1,n)
+#去掉第2列,生成绘图数据；
+edge <- dt[-2]
+edge$Pathway <- factor(edge$Pathway, levels = (c(edge$Pathway) %>% unique()))
+#转成宽数据矩阵，用作绘图数据；
+mat <- acast(edge,gene~Pathway)
+#将NA替换为0；
+mat[is.na(mat)] <- 0
+#从表达量表格提取差异倍数数据；
+ind <- row.names(mat)
+logFC <- expr[ind,]$logFC
+ID <- expr[ind,]$ID
+#将logfc数据加入到矩阵中；
+mat2 <- data.frame(mat,ID,logFC)
+rownames(mat2) <- mat2$ID
+mat2 <- mat2 %>% dplyr::select(-ID)
+
+#自定义颜色；
+# mycol <- c("#9dacb3","#896f96","#003a6c","#db6000","#f2c76d","#0077c1","#d982ba","#5ea6a3")
+# mycol <- c("#ffaa00","#b37700","#ffd580","#ffeabf","#bfecff","#80d9ff","#005478","#0078ab")
+# mycol <- c("#FFC0C6","#FF5630","#FA6A10","#F88C35","#F2A816","#FDD070","#ADCF80","#60851A","#66CBCF","#B2F0FF","#1C98B9","#B6AAE3")
+mycol <- c("#FFC0C6","#FF5630","#F2A816","#ADCF80","#60851A","#66CBCF","#B2F0FF","#B6AAE3")
+# mycol <- c("#ffaa00","#b37700","#ffeabf","#80d9ff","#bfecff","#005478")
+#mycol <- c("#ffadad","#ffd6a5","#fdffb6","#caffbf","#9bf6ff","#a0c4ff","#bdb2ff","#ffc6ff")
+# mycol <- c("#7C4697","#5D90BA","#5ea6a3","#D8D155","#cf7685")
+#调整透明度；
+mycol1 <- alpha(mycol,0.9)
+
+#添加缝隙，根据log2FC进行排序，并指定渐变色；
+GOChord(mat2,
+        space = 0.02,
+        gene.size = 3,
+        process.label = 10,
+        border.size = 0,
+        ribbon.col = mycol1,
+        gene.order = 'logFC',
+        lfc.col=c('#de2128','white','#02a858'),
+        limit = c(1,0),
+        title = "Genes Significantly Impacting Pathways \nin PreAs after 24-week HFSC Diet") 
+ggsave("./subset_ASPC/Chord_PreA.pdf", width = 8, height = 9.65)
+``` 
+
+# DE_RMP
+## Volcano for DE_RMP
+```{r Volcano_DE_RMP}
+DE_RMP<- read.csv("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/results/2024-07-17/DE_results_RMP-HFSC_vs_Chow.csv")
+head(DE_RMP) #gene p_val avg_log2FC pct.1 pct.2 p_val_adj
+colnames(DE_RMP)[1:3] <- c("Gene","P.Value","logFC","pct.1","pct.2","adjP.Value")
+rownames(DE_RMP) <- DE_RMP$Gene
+head(DE_RMP)
+x <- DE_RMP
+
+logFCcut <- 1 #log2-foldchange
+pvalCut <- 1e-2 #P.value
+adjPcut <- 0.1 #adj.P.value
+
+#for advanced mode
+logFCcut2 <- 2 
+logFCcut3 <- 5
+pvalCut2 <- 1e-10
+pvalCut3 <- 1e-20
+
+#置x，y軸的最大最小位置
+xmin <- (range(x$logFC)[1]- (range(x$logFC)[1]+ 10))
+xmax <- (range(x$logFC)[1]+ (10-range(x$logFC)[1]))
+ymin <- 0
+ymax <- -log10(sort(x$P.Value)[1]) * 1.1
+
+# 基因名的颜色，需大于等于pathway的数量，这里自定义了足够多的颜色
+mycol <- c("darkgreen","chocolate4","blueviolet","#223D6C","#D20A13","#088247","#58CDD9","#7A142C","#5D90BA","#431A3D","#91612D","#6E568C","#E0367A","#D8D155","#64495D","#7CC767")
+
+# 複雜的的setting for color
+n1 <- length(x[, 1])
+cols <- rep("grey", n1)
+names(cols)<- rownames(x)
+
+#不同阈值的点的颜色
+#cols[x$P.Value < pvalCut & x$logFC >logFCcut]<- "#FB9A99"
+#cols[x$P.Value < pvalCut2 & x$logFC > logFCcut2]<- "#ED4F4F"
+#cols[x$P.Value < pvalCut & x$logFC < -logFCcut]<- "#B2DF8A"
+#cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- "#329E3F"
+cols[x$P.Value < pvalCut & x$logFC >logFCcut]<- "#f77e7e"
+cols[x$P.Value < pvalCut2 & x$logFC >  logFCcut2]<- "#c21b2b"
+cols[x$P.Value < pvalCut & x$logFC < -logFCcut]<- "#73b6f5"
+cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- "#136cbf"
+color_transparent <- adjustcolor(cols, alpha.f = 0.5)
+x$color_transparent <- color_transparent
+
+# 複雜的的setting for size
+n1 <- length(x[, 1])
+size <- rep(1, n1)
+
+#不同阈值的点的大小
+size[x$P.Value < pvalCut & x$logFC > logFCcut]<- 2
+size[x$P.Value < pvalCut2 & x$logFC > logFCcut2]<- 4
+size[x$P.Value < pvalCut3 & x$logFC > logFCcut3]<- 6
+size[x$P.Value < pvalCut & x$logFC < -logFCcut]<- 2
+size[x$P.Value < pvalCut2 & x$logFC < -logFCcut2]<- 4
+size[x$P.Value < pvalCut3 & x$logFC < -logFCcut3]<- 6
+
+# Construct the plot object
+#BiocManager::install('ggthemes')
+library(ggplot2)
+library(ggrepel)
+library(ggthemes)
+library(gridExtra)
+p1 <- ggplot(data=x, aes(logFC, -log10(P.Value), label = Gene, color = pathway)) +
+  geom_point(alpha = 0.6, size = size, colour = x$color_transparent) +
+
+  labs(x=bquote(~Log[2]~"(fold change)"), y=bquote(~-Log[10]~italic("P-value")), title="") + 
+  ylim(c(ymin,ymax)) + 
+  scale_x_continuous(
+    breaks = c(-5, -2,-logFCcut, 0, logFCcut, 2, 5), #刻度线的位置
+    labels = c(-5, -2, -logFCcut, 0, logFCcut, 2 , 5),
+    limits = c(-6.5, 9) #x轴范围，两侧对称才好看
+  ) +
+  #或用下面这行：
+  #xlim(c(xmin, xmax)) + 
+
+#画阈值分界线
+geom_vline(xintercept = c(-logFCcut, logFCcut), color="grey40", 
+           linetype="longdash", lwd = 0.1) + #虚线的形状和粗细
+geom_hline(yintercept = -log10(pvalCut), color="grey40", 
+           linetype="longdash", lwd = 0.1) +
+  
+theme_bw(base_size = 10 #, base_family = "Times" #修改字体
+         ) +
+theme(panel.grid=element_blank())
+
+p1 <- p1 + 
+geom_vline(xintercept = c(-logFCcut2, logFCcut2), color="grey40", 
+           linetype="longdash", lwd = 0.1) +
+geom_hline(yintercept = -log10(pvalCut2), color="grey40", 
+             linetype="longdash", lwd = 0.1)
+
+# 显示 logFC > n 的基因的基因名
+n = 2
+p1 + geom_text_repel(aes(x = logFC,
+                         y = -log10(P.Value), 
+                         label = ifelse(logFC > n & -log10(P.Value) > 5, rownames(x),"")),
+                     colour="#9c0917", size = 3, box.padding = unit(0.3, "lines"),
+                     point.padding = unit(0.01, "lines")) +
+  geom_text_repel(aes(x = logFC, 
+                      y = -log10(P.Value), 
+                      label = ifelse(logFC < -n & -log10(P.Value) > 5, rownames(x),"")),
+                  colour="#0054a3", size = 3, box.padding = unit(0.3, "lines"), 
+                  point.padding = unit(0.01, "lines"))
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/DE_RMP_volcano.pdf", width=6,height=6)
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/DE_RMP_volcano.png", width=6, height=6, dpi = 500)
+```
+
+## Bubble for DE_RMP_top
+```{r Bubble_RMP_top}
+library(ggplot2)
+library(readxl)
+data <- read_excel("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/results/2024-07-17/RMP_DEGs.xlsx")
+colnames(data) <- c("ID","Symbol","P.value","LogFC")
+data <- data[order(data$LogFC, decreasing = FALSE),]
+data <- rbind(data[1:8,],data[(nrow(data)-22):nrow(data),])
+
+# Convert Symbol to a factor to control the order of plotting
+data$ID <- factor(data$ID, levels = unique(data$ID)) 
+
+# Map shapes and colors based on LogFC
+data$Shape <- ifelse(data$LogFC > 0, 24, 25) # 24 for triangle up, 25 for triangle down
+data$Color <- ifelse(data$LogFC > 0, "#DA7680", "#72A7D9")
+data$Regulation <- factor(ifelse(data$LogFC > 0, "Up", "Down"),
+                          levels = c("Up", "Down"))
+
+# Plot
+ggplot(data, aes(x=LogFC, y=ID, size=-log10(P.value), shape=Regulation, color=Regulation)) +
+  geom_point(stroke= 1) +
+  scale_shape_manual(values = c("Up" = 24, "Down" = 25)) +
+  scale_color_manual(values = c("Up" = "#DA7680", "Down" = "#72A7D9")) +
+  theme_minimal() +
+  theme(panel.background = element_rect(fil="white"), 
+        panel.grid.major = element_line(color="lightgrey",size=0.1),
+        axis.text.x = element_text(size = 8, face = "bold"),
+        axis.text.y = element_text(size = 10, color="black",face = "bold"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")) +
+  labs(title="Significant DEGs in RMPs: Chow vs HFSC",
+       size = bquote(~-Log[10]~italic("P-value")),
+       x="LogFC", 
+       y="Gene Symbol",
+       color = "Gene Regulation",
+       shape = "Gene Regulation")+
+  scale_x_continuous(
+    limits = c(-3, 9)  #x轴范围，两侧对称才好看 
+  ) +
+  guides(size = guide_legend(override.aes = list(shape = 17)))
+
+# Save the plot
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/RMP_gex_plot.pdf", width=5, height=7, dpi=600)
+ggsave("/Users/hueee/Lab/Feinberg\ Lab/Single_cell_adipose_tissue/subset_ASPC/RMP_gex_plot.png", width=5, height=7, dpi=600)
+```
+
+## Canonical Pathways
+```{r IPA_RMP_cano}
+data <- read_excel("./subset_ASPC/results/2024-07-17/RMP_pw_selected.xlsx")
+data <- data[order(data$`zScore`, decreasing = TRUE),]
+data$`Ingenuity Canonical Pathways` <- factor(data$`Ingenuity Canonical Pathways`, 
+                                              levels = rev(data$`Ingenuity Canonical Pathways`))
+
+data$Shape <- ifelse(data$zScore > 0, 24, ifelse(data$zScore < 0, 25, 21)) # 24 for triangle up, 25 for triangle down
+data$Regulation <- factor(ifelse(data$zScore > 0, "Up", ifelse(data$zScore < 0, "Down", "NA")), levels = c("Up", "Down","NA"))
+
+# Plot
+ggplot(data, aes(x=zScore, 
+                 y=`Ingenuity Canonical Pathways`, 
+                 size=Ratio*100, 
+                 shape=Regulation, 
+                 color=`-log(p-value)`)) +
+  geom_point(stroke= 1) +
+  scale_shape_manual(values = c("Up" = 24, "Down" = 25, "NA" = 21)) +
+  scale_color_gradient(low = "#A880CF",high = "#FEDD94") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fil="white"), 
+        panel.grid.major = element_line(color="lightgrey",size=0.1),
+        title = element_text(size = 12, face = "bold"),
+        axis.text.x = element_text(size = 8, color="black"),
+        axis.text.y = element_text(size = 10, color="black"),
+        axis.title.x = element_text(size = 14, face = "bold"),
+        axis.title.y = element_text(size = 14, face = "bold")) +
+  labs(title="Top Canonical Pathways in RMPs \n24-week HFSC Diet",
+       size = "Ratio(%)",
+       x="Z-score", 
+       y="Canonical Pathways",
+       color = bquote(~-log[10]~italic("P-value")),
+       shape = paste("Regulation", sep = "\n"))+
+  scale_x_continuous() +
+  scale_y_discrete(labels = label_wrap(levels(data$`Ingenuity Canonical Pathways`), width = 47))+
+  guides(size = guide_legend(override.aes = list(shape = 17)))
+ggsave("./subset_ASPC/Cano_RMP.pdf", width=7, height=6)
+```
+
+## Cano_ChordPlot
+```{r cano_chord}
+data <- read_excel("./subset_ASPC/results/2024-07-17/RMP_Chord_input.xlsx")
+colnames(data)[1] <- "Pathway"
+expr <- read.csv("./subset_ASPC/results/2024-07-17/DE_results_RMP-HFSC_vs_Chow.csv")
+colnames(expr)[1] <- "ID"
+colnames(expr)[3] <- "logFC"
+expr <- as.data.frame(expr)
+row.names(expr) <- expr$ID
+
+#转成关系对数据；
+dt <- pivot_longer(data,!Pathway, names_to = "index",
+                   values_to = "gene",
+                   values_drop_na = TRUE)
+
+# BiocManager::install("Hmisc") 转换基因名
+library(Hmisc)
+library(reshape2)
+library(GOplot)
+dt$gene <- str_to_title(dt$gene)
+#生成权重数值；
+n <- nrow(dt)
+dt$value <- rep(1,n)
+#去掉第2列,生成绘图数据；
+edge <- dt[-2]
+edge$Pathway <- factor(edge$Pathway, levels = (c(edge$Pathway) %>% unique()))
+#转成宽数据矩阵，用作绘图数据；
+mat <- acast(edge,gene~Pathway)
+#将NA替换为0；
+mat[is.na(mat)] <- 0
+#从表达量表格提取差异倍数数据；
+ind <- row.names(mat)
+logFC <- expr[ind,]$logFC
+ID <- expr[ind,]$ID
+#将logfc数据加入到矩阵中；
+mat2 <- data.frame(mat,ID,logFC)
+rownames(mat2) <- mat2$ID
+mat2 <- mat2 %>% dplyr::select(-ID)
+
+#自定义颜色；
+# mycol <- c("#9dacb3","#896f96","#003a6c","#db6000","#f2c76d","#0077c1","#d982ba","#5ea6a3")
+# mycol <- c("#ffaa00","#b37700","#ffd580","#ffeabf","#bfecff","#80d9ff","#005478","#0078ab")
+# mycol <- c("#FFC0C6","#FF5630","#FA6A10","#F88C35","#F2A816","#FDD070","#ADCF80","#60851A","#66CBCF","#B2F0FF","#1C98B9","#B6AAE3")
+mycol <- c("#FF5630","#F2A816","#60851A","#66CBCF","#B2F0FF","#B6AAE3")
+# mycol <- c("#ffaa00","#b37700","#ffeabf","#80d9ff","#bfecff","#005478")
+#mycol <- c("#ffadad","#ffd6a5","#fdffb6","#caffbf","#9bf6ff","#a0c4ff","#bdb2ff","#ffc6ff")
+# mycol <- c("#7C4697","#5D90BA","#5ea6a3","#D8D155","#cf7685")
+#调整透明度；
+mycol1 <- alpha(mycol,0.9)
+
+#添加缝隙，根据log2FC进行排序，并指定渐变色；
+GOChord(mat2,
+        space = 0.02,
+        gene.size = 3,
+        process.label = 10,
+        border.size = 0,
+        ribbon.col = mycol1,
+        gene.order = 'logFC',
+        lfc.col=c('#de2128','white','#02a858'),
+        limit = c(1,0),
+        title = "Genes Significantly Impacting Pathways \nin RMPs after 24-week HFSC Diet") 
+ggsave("./subset_ASPC/Chord_RMP.pdf", width = 8, height = 9.65)
+``` 

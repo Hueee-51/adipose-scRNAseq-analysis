@@ -1,0 +1,78 @@
+project:
+  name: "Adipose snRNA-seq analysis"
+  organism: "Mus musculus vWAT"
+  assay: "single-cell RNA-seq"
+
+qc:
+  min_cells: 3
+  min_features_initial: 200
+  min_genes: 500
+  min_umis: 800
+  max_mito_percent: 18
+  min_novelty: 0.8
+  mitochondrial_gene_pattern: "^mt-"
+
+integration:
+  normalization_method: "SCT"
+  n_integration_features: 3000
+  n_pcs: 20
+  clustering_resolution: 0.5
+
+major_celltype_de:
+  condition_1: "HFSC"
+  condition_2: "Chow"
+  test_use: "wilcox"
+  min_pct: 0.1
+  logfc_threshold: 0
+  fdr_cutoff: 0.05
+  log2fc_cutoff_for_filtered_table: 0.25
+
+aspc_subcluster:
+  n_integration_features: 3000
+  n_pcs: 20
+  clustering_resolution: 0.6
+  subclusters:
+    - Areg
+    - FAP
+    - ASC
+    - PreA
+    - RMP
+
+endothelial_subcluster:
+  n_integration_features: 3000
+  n_pcs: 20
+  clustering_resolution: 0.6
+  subclusters:
+    - REC
+    - IREC
+    - MesEC
+    - IEC
+    - VEC
+    - MbEC
+    - LEC
+
+macrophage_subcluster:
+  n_integration_features: 3000
+  n_pcs: 20
+  clustering_resolution: 0.3
+  subclusters:
+    - NPVM
+    - PVM
+    - LAM
+    - AM
+    - CEM1
+    - CEM2
+    - PLAM
+    - RM
+
+cellchat:
+  database: "CellChatDB.mouse"
+  database_subset: "Secreted Signaling"
+  communication_probability_method: "triMean"
+  min_cells: 10
+  selected_pathways:
+    - COMPLEMENT
+    - CCL
+    - ANGPTL
+    - MIF
+    - TGFb

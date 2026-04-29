@@ -1,0 +1,88 @@
+# ============================================================
+# R / RStudio
+# ============================================================
+
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+*.Rproj
+
+# ============================================================
+# Large R objects
+# ============================================================
+
+*.rds
+*.RDS
+*.RData
+*.rda
+
+# ============================================================
+# Single-cell sequencing data
+# ============================================================
+
+*.h5
+*.h5ad
+*.loom
+*.mtx
+*.mtx.gz
+*.tsv.gz
+*.csv.gz
+*.fastq
+*.fastq.gz
+*.bam
+*.bam.bai
+*.bai
+
+raw_feature_bc_matrix/
+filtered_feature_bc_matrix/
+outs/
+cellranger/
+
+# ============================================================
+# Data folders not intended for public release
+# ============================================================
+
+data/raw/
+data/processed/
+data/intermediate/
+objects/
+private/
+cache/
+tmp/
+
+# ============================================================
+# Generated results
+# ============================================================
+
+results/**/*.rds
+results/**/*.RDS
+results/**/*.RData
+results/**/*.csv
+results/**/*.tsv
+results/**/*.xlsx
+results/**/*.pdf
+results/**/*.png
+results/**/*.jpg
+results/**/*.jpeg
+results/**/*.txt
+
+# Keep README files and empty-folder placeholders
+!results/**/README.md
+!results/**/.gitkeep
+!data/**/README.md
+!data/**/.gitkeep
+
+# ============================================================
+# System files
+# ============================================================
+
+.DS_Store
+Thumbs.db
+
+# ============================================================
+# IDE / editor files
+# ============================================================
+
+.vscode/
+.idea/

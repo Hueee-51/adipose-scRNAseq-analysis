@@ -1,0 +1,1120 @@
+---
+title: "subset_Macro"
+author: "Y HU"
+date: "2024-05-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+rm(list = ls())
+knitr::opts_knit$set(root.dir = normalizePath("/Users/hueee/Lab/Feinberg Lab/Single_cell_adipose_tissue"))
+setwd("/Users/hueee/Lab/Feinberg Lab/Single_cell_adipose_tissue")
+params <- list(seurat_integrated = "./3_Integration/combined/renamed/seurat_combined_sct_umap_renamed.rds", 
+       sample_name = "Macro_subset", minimum_pval_genes = 0.05, 
+       output_dir = "./subset_Macro", results_dir = "./subset_Macro")
+
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+packages = c("AnnotationHub", "ArchR", "assertthat", "CCA", "celldex", "CellChat", 
+             "clustree", "cowplot", "dplyr", "DT", "forcats", "future", "ggforce", 
+             "ggplot2", "ggsci", "GSEABase", "GSVA", "harmony", "janitor", 
+             "magrittr", "Matrix", "monocle3", "patchwork", "plyr", "randomcoloR", 
+             "RColorBrewer", "reshape", "SCpubr", "scater", "scattermore", "Seurat",
+             "SingleR", "stringr", "tidydr", "tidyverse")
+# if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
+# if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+#BiocManager::install("irGSEA")
+for (pkg in packages) {
+  if (!require(pkg, character.only = TRUE)) {
+    install.packages(pkg)
+    library(pkg, character.only = TRUE)
+  }
+}
+```
+
+# Directory paths
+```{r path}
+data_dir <- file.path(params$output_dir, "data", Sys.Date())
+results_dir <- file.path(params$output_dir, "results", Sys.Date())
+
+invisible(mapply(
+  FUN = dir.create,
+  list(data_dir, results_dir),
+  MoreArgs = list(recursive = TRUE, showWarnings = FALSE)
+))
+```
+
+# Subset Macro
+```{r subset_Macro}
+seurat.combined.sct <- readRDS("./3_Integration/data/2024-05-10/seurat_combined_sct_umap_renamed.rds")
+seurat.combined.sct <- NormalizeData(seurat.combined.sct, assay = "RNA")
+Idents(seurat.combined.sct) <- "renamed_cluster"
+Macro.cells <- subset(seurat.combined.sct, idents = c("Macrophage"))
+saveRDS(Macro.cells,file.path(data_dir,paste0("Macro.cells.rds")))
+
+# split condition
+split_seurat <- SplitObject(Macro.cells, split.by = "sample")
+split_seurat <- split_seurat[c("Chow","HFSC")]
+
+seurat.list <- lapply(X = split_seurat, FUN = SCTransform, verbose = FALSE)
+features <- SelectIntegrationFeatures(object.list = seurat.list , nfeatures = 3000)
+seurat.list <- PrepSCTIntegration(object.list = seurat.list, anchor.features = features)
+seurat.anchors <- FindIntegrationAnchors(object.list = seurat.list, normalization.method = "SCT",
+                                         anchor.features = features)
+seurat.combined.sct.Macro <- IntegrateData(anchorset = seurat.anchors, normalization.method = "SCT")
+seurat.combined.sct.Macro <- RunPCA(seurat.combined.sct.Macro, verbose = FALSE)
+
+# ElbowPlot
+png(filename = './subset_Macro/Macro_ElbowPlot.png')
+ElbowPlot(seurat.combined.sct.Macro, ndim = 30)
+dev.off()
+
+ndims <- 20
+seurat.combined.sct.Macro <- RunUMAP(seurat.combined.sct.Macro, reduction = "pca", dims = 1:ndims)
+seurat.combined.sct.Macro <- FindNeighbors(seurat.combined.sct.Macro, dims = 1:ndims, verbose = FALSE)
+seurat.combined.sct.Macro <- FindClusters(seurat.combined.sct.Macro, verbose = FALSE, resolution = seq(0.1,1,0.1))
+for(res in seq(0.1,1,0.1)){
+  cat("#### res:",res, "\n")
+  Idents(seurat.combined.sct.Macro) <- paste0("integrated_snn_res.", res)
+  png(filename = sprintf('./subset_Macro/res_new_%s.png', res))
+  p2 <- DimPlot(seurat.combined.sct.Macro, label = T)
+  print(p2)
+  dev.off()
+  cat("\n")
+  cat("\n")
+}
+
+seurat.combined.sct.Macro <- FindClusters(seurat.combined.sct.Macro, verbose = FALSE, resolution = 0.2)
+Idents(seurat.combined.sct.Macro) <-  "integrated_snn_res.0.3"
+png(filename = './subset_Macro/res_0.3.png')
+DimPlot(seurat.combined.sct.Macro, label = T)
+seurat.combined.sct.Macro[[]] %>% head()
+table(Idents(seurat.combined.sct.Macro))
+
+metadata = seurat.combined.sct.Macro@meta.data 
+png(filename = './subset_Macro/cell_counts_newcutoff.png')
+metadata %>% 
+  ggplot(aes(x=sample, fill=sample)) + 
+  geom_bar() +
+  theme_classic() +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  theme(plot.title = element_text(hjust=0.5, face="bold")) +
+  ggtitle("NCells")
+dev.off()
+
+markers.to.plot = c("Spp1","Trem2","Lpl","Cd9") # LAM
+markers.to.plot = c("Mrc1","Lyve1","Cd163","Mtss1") # PVM
+markers.to.plot = c("Prg4","Tgfb2","Ltbp1","Rp1") # RM
+markers.to.plot = c("Pola1","Kif11","Kif15","Cdca2") #PLAM
+markers.to.plot = c("Col5a2","Tgfbr3","Col3a1") #CEM
+markers.to.plot = c("Cd74","Fcrls","Ear2","Cd163") #NPVM (BAM,Border-associated macrophages)
+markers.to.plot = c("Col5a2","Tgfbr3","Col3a1") #AM
+markers.to.plot = c("Ptprc","Itgam","Csf1r","Fcgr1a","Adgre1","Mertk","Hla-Dra","Cx3cr1") # or NPVM (BAM,Border-associated macrophages)
+
+
+for(gene in markers.to.plot){
+  if(gene %in% rownames(seurat.combined.sct.Macro)){
+    cat("### ",gene, "\n")
+    png(filename = sprintf('./subset_Macro/markers/markers_allsimple_%s.png', gene), width=6, height=6, units="in", res=100)
+    p <- FeaturePlot(seurat.combined.sct.Macro, 
+                     features = gene, reduction = "umap",
+                     order = TRUE,
+                     label = TRUE,
+                     min.cutoff = "q10")
+    #split.by = "orig.ident")
+    print(p)
+    dev.off()
+    cat("\n")
+  }
+  else{
+    cat("### ",gene, " \n")
+    cat("Not present in dataset \n")
+  }
+  cat("\n")
+}
+
+saveRDS(seurat.combined.sct.Macro, file = file.path(data_dir, "seurat_combined_sct_umap_Macro.rds"))
+```
+
+## Clustering and annotation
+```{r Macro_annotation}
+seurat.combined.sct.Macro <- readRDS("./subset_Macro/data/2024-05-06/seurat_combined_sct_umap_Macro.rds")
+Idents(seurat.combined.sct.Macro) <-  "integrated_snn_res.0.3"
+table(seurat.combined.sct.Macro$integrated_snn_res.0.3)
+assignment_df <- data.frame(
+  cluster = c("0", "6",
+              "3","4",
+              "1",
+              "8",
+              "5","10",
+              "7",
+              "2",
+              "9"), 
+  sub_cluster = c(
+    rep("NPVM",2), 
+    rep("PVM",2),
+    rep("LAM",1),
+    rep("PLAM",1),
+    rep("CEM1",2), 
+    rep("CEM2",1),
+    rep("AM", 1),
+    rep("RM", 1)
+  )
+)
+
+print(assignment_df)
+
+assignment_df$sub_cluster = as.character(assignment_df$sub_cluster)
+
+temp_meta <- seurat.combined.sct.Macro@meta.data %>% as.data.frame() %>% 
+  tibble::rownames_to_column(var = "barcode") %>% 
+  left_join(assignment_df, by = c("integrated_snn_res.0.3" = "cluster")) %>% 
+  tibble::column_to_rownames(var = "barcode")
+
+temp_meta <- temp_meta[,-32]
+colnames(temp_meta)[34] <- "sub_cluster"
+colnames(temp_meta)
+
+temp_meta$sub_cluster <- fct_explicit_na(temp_meta$renamed_cluster, "Unknown")
+seurat.combined.sct.Macro$sub_cluster <- temp_meta[rownames(seurat.combined.sct.Macro@meta.data),"sub_cluster"]
+table(seurat.combined.sct.Macro$sub_cluster)
+Idents(seurat.combined.sct.Macro) <- "sub_cluster"
+levels(seurat.combined.sct.Macro) <- c("NPVM","LAM","PVM","AM","CEM1","CEM2","PLAM","RM")
+
+#seurat.combined.sct.Macro$seurat_clusters <- as.factor(seurat.combined.sct.Macro$seurat_clusters)
+#seurat.combined.sct.Macro$renamed_cluster <- as.factor(seurat.combined.sct.Macro$renamed_cluster)
+
+seurat.combined.sct.Macro$sample_simple <- stringi::stri_sub(seurat.combined.sct.Macro$orig.ident,-4,-1)
+seurat.combined.sct.Macro$DE_subgroup <- paste0(seurat.combined.sct.Macro$sub_cluster, "-", seurat.combined.sct.Macro$sample_simple)
+Idents(seurat.combined.sct.Macro) <- "DE_subgroup"
+
+as.data.frame(table(seurat.combined.sct.Macro$DE_subgroup)) %>% 
+  dplyr::select(group = Var1, number_of_cells = Freq) %>% 
+  DT::datatable()
+
+
+Idents(seurat.combined.sct.Macro) <- "sub_cluster"
+levels(seurat.combined.sct.Macro) <- c("NPVM","LAM","PVM","AM","CEM1","CEM2","PLAM","RM")
+```
+
+## Generate UMAP Plot
+```{r UMAP}
+# saveRDS(seurat.combined.sct.Macro, file = "./subset_Macro/data/2024-05-06/seurat_combined_sct_umap_Macro_anno.rds")
+seurat.combined.sct.Macro <- readRDS("./subset_Macro/data/2024-05-06/seurat_combined_sct_umap_Macro_anno.rds")
+
+Idents(seurat.combined.sct.Macro) <- "sub_cluster"
+levels(seurat.combined.sct.Macro) <- c("NPVM","LAM","PVM","AM","CEM1","CEM2","PLAM","RM")
+
+pdf('./subset_Macro/Macro_subtype_labels.pdf', width=6.5,height=4)
+DimPlot(seurat.combined.sct.Macro, group.by = "sub_cluster", label = T,
+        split.by = 'sample_simple', ncol = 2) + scale_color_nejm() +
+    theme_dr(xlength = 0.2, 
+           ylength = 0.2,
+           arrow = arrow(length = unit(0.1, "in"), type = "closed")) + 
+  theme(panel.grid=element_blank()) + 
+  plot_annotation('vWAT Macrophages', 
+                  subtitle = 'n = 5,126 cells',
+                  theme = theme(plot.title=element_text(hjust=0.5,size = 12),
+                                plot.subtitle = element_text(hjust=0.5,size = 10)))
+dev.off()
+
+png(filename = './subset_Macro/cluter_renamed_umap.png', width=4.5, height=4, units="in", res=500)
+DimPlot(seurat.combined.sct.Macro, group.by = "sub_cluster", label = T) + ggtitle("") + 
+  scale_color_nejm() +
+  theme_dr(xlength = 0.2, 
+           ylength = 0.2,
+           arrow = arrow(length = unit(0.1, "in"), type = "closed")) + 
+  theme(panel.grid=element_blank()) + 
+  plot_annotation('vWAT Macrophages', 
+                  subtitle = 'n = 5,126 cells',
+                  theme = theme(plot.title=element_text(hjust=0.5,size = 12, face = "bold"),
+                                plot.subtitle = element_text(hjust=0.5,size = 10,face = "bold")))
+dev.off()
+
+Idents(seurat.combined.sct.Macro) <- "sub_cluster"
+levels(seurat.combined.sct.Macro$sub_cluster) <- c("NPVM","LAM","PVM","AM","CEM1","CEM2","PLAM","RM")
+pdf('./subset_Macro/cluter_renamed_umap.pdf', width=4.5, height=4)
+DimPlot(seurat.combined.sct.Macro, group.by = "sub_cluster", label = T) + ggtitle("") + 
+  scale_color_nejm() +
+  theme_dr(xlength = 0.2, 
+           ylength = 0.2,
+           arrow = arrow(length = unit(0.1, "in"), type = "closed")) + 
+  theme(panel.grid=element_blank()) + 
+  plot_annotation('vWAT Macrophages', 
+                  subtitle = 'n = 5,126 cells',
+                  theme = theme(plot.title=element_text(hjust=0.5,size = 12, face = "bold"),
+                                plot.subtitle = element_text(hjust=0.5,size = 10,face = "bold")))
+dev.off()
+
+DE_Macro<- read.csv("./DE_Macro/results/2024-05-05/Macrophage-HFSC_vs_Macrophage-Chow/DE_results_Macrophage-HFSC_vs_Macrophage-Chow.csv")
+data <- DE_Macro
+colnames(data)[1:3] <- c("Gene","P.Value","logFC")
+data <- data[order(data$P.Value, decreasing = FALSE),]
+data_up <- subset(data,logFC>0)[1:20,]
+data_down <- subset(data,logFC<0)[1:20,]
+data_top20 <- rbind(data_up,data_down)
+data_top20 <- data_top20[order(data_top20$logFC, decreasing = F),]
+min_nonzero_value <- min(data_top20$P.Value[data_top20$P.Value != 0])
+data_top20$P.Value[data_top20$P.Value == 0] <- min_nonzero_value * 1e-2
+top20<-data_top20
+markers.to.plot = top20$Gene
+markers.to.plot = "Lyz2"
+cols = gg_color_hue(length(unique(seurat.combined.sct.Macro$renamed_cluster)))
+for(gene in markers.to.plot){
+  if(gene %in% rownames(seurat.combined.sct.Macro)){
+    cat("### ",gene, "{.tabset} \n")
+    cat("#### Grouped by cluster, split by genotype {.tabset} \n")
+    cat("\n")
+    cat("##### Side by side \n")
+    png(filename = sprintf('./subset_Macro/markers_TopinDEG/markers_%s.png', gene), width=4,height=4,units="in",res=300)
+    p <- VlnPlot(seurat.combined.sct.Macro, features = gene,
+                 pt.size = 0.1, group.by = "renamed_cluster") +
+      theme(axis.text.x = element_text(angle = 90, hjust=1))
+    print(p)
+    dev.off()
+}
+  else{
+    cat("### ",gene, " \n")
+    cat("Not present in dataset \n")
+  }
+  cat("\n")
+}
+
+# violin plot for Macro markers, specific in LAM
+pdf("./subset_Macro/markers_TopinDEG/markers.pdf", width = 5, height = 8)
+VlnPlot(seurat.combined.sct.Macro, 
+        features = c("Gpnmb","Trem2","Lpl","Ctsd"),
+        pt.size = 0,
+        ncol = 1,
+        split.by = "sample_simple",
+        split.plot = T)+
+  theme(axis.title.x = element_blank())
+dev.off()
+
+```
+
+## Statistical stacked pieplot (number & percent) 
+```{r cell_number_plot}
+data_table <- as.data.frame(table(seurat.combined.sct.Macro$DE_subgroup))
+data_table$groups <- rep(c("Chow","HFSC"),8)
+colnames(data_table) = c("Cell Types","Numbers","Groups")
+data_table <- data_table %>%
+  mutate(`Cell Types` = sub("-.*", "", `Cell Types`))
+df_wide <- data_table %>%
+  pivot_wider(names_from = Groups, values_from = Numbers)
+df_wide$`Cell Types` <- factor(df_wide$`Cell Types`, levels = c("NPVM", "PVM", "LAM", "AM", "CEM1", "CEM2", "PLAM", "RM"))
+df_wide <- df_wide %>% 
+  arrange(`Cell Types`)
+write.csv(df_wide,"./subset_Macro/Macro subcluster cell number.csv", row.names = F,quote = F)
+
+# 生成celltypes饼图
+data <- data.frame(
+  category = c("NPVM-Chow","PVM-Chow","LAM-Chow","AM-Chow","CEM1-Chow","CEM2-Chow","PLAM-Chow","RM-Chow","RM-HFSC","PLAM-HFSC","CEM2-HFSC","CEM1-HFSC","AM-HFSC","LAM-HFSC","PVM-HFSC","NPVM-HFSC"),
+  #angle = c(81.6,65.89090909,4.036363636,11.34545455,4.472727273,4.036363636,6.872727273,1.745454545,4.090909091,12.89413119,15.63866513,25.78826237,23.09551208,36.24856157,21.90448792,40.33947066) 
+  angle = c(26.26609442,21.20952009,1.299258681,3.651970347,1.439719079,1.299258681,2.212251268,0.561841592,2.77409286,8.743659774,10.60476005,17.48731955,15.66133437,24.58056964,14.85368709,27.3546625)# 角度
+)
+data$category <- factor(data$category, levels = c("NPVM-Chow","PVM-Chow","LAM-Chow","AM-Chow","CEM1-Chow","CEM2-Chow","PLAM-Chow","RM-Chow","RM-HFSC","PLAM-HFSC","CEM2-HFSC","CEM1-HFSC","AM-HFSC","LAM-HFSC","PVM-HFSC","NPVM-HFSC"))
+data <- data %>%
+  mutate(
+    end_angle = cumsum(angle),
+    start_angle = lag(end_angle, default = 0),
+    midpoint_angle = (start_angle + end_angle) / 2
+  )
+ggplot(data, aes(x = 2, y = angle, fill = category)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y", start = 0) +
+  xlim(0.5, 2.5) +
+  theme_void() + # 去除坐标轴等
+  theme(legend.title = element_blank(), legend.position = "right") +
+  labs(title = "Custom Angle Pie Chart")
+
+ggsave("./subset_Macro/macrophage_pie.pdf", width = 10)
+
+# 生成sample饼图
+data <- data.frame(
+  category = c("Chow","HFSC"),
+  angle = c(115.8798283,244.1201717)) # 角度
+data$category <- factor(data$category, levels = c("Chow","HFSC"))
+data <- data %>%
+  mutate(
+    end_angle = cumsum(angle),
+    start_angle = lag(end_angle, default = 0),
+    midpoint_angle = (start_angle + end_angle) / 2
+  )
+ggplot(data, aes(x = 2, y = angle, fill = category)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  coord_polar(theta = "y", start = 0) +
+  xlim(0.5, 2.5) +
+  theme_void() + # 去除坐标轴等
+  theme(legend.title = element_blank(), legend.position = "right") +
+  labs(title = "Custom Angle Pie Chart")
+
+ggsave("./subset_Macro/macrophage_pie2.pdf", width = 6)
+```
+
+## Statistical stacked barplot (number & percent) 
+```{r cell_number_bar}
+data_cluster <- as.data.frame(table(seurat.combined.sct.Macro$sub_cluster))
+colnames(data_cluster) = c("Cell Types","Numbers")
+
+mycol <- c( "#7876B1", "#FFDC90", "#1F864E", "#BC3B29", "#0171B5",  "#E18728", "#6F99AD", "#EE4B97")
+
+# Stacked + percent
+data_cluster$`Cell Types` <- factor(data_cluster$`Cell Types`, levels = rev(c("NPVM", "PVM", "LAM", "AM", "CEM1", "CEM2", "PLAM", "RM")))
+C <- ggplot(data_cluster, aes(fill=`Cell Types`, y=`Cell Types`, x=Numbers)) + 
+    geom_bar(stat="identity") + theme_bw() +
+  theme(axis.title.y = element_blank(),
+        panel.grid=element_blank(),
+        axis.text.y = element_text(size=5, colour = "black"),
+        axis.text.x = element_text(size=5),
+        axis.title.x = element_text(size=8)) +
+  scale_fill_manual(values = rev(mycol)) + 
+  NoLegend()
+# ggsave("./subset_Macro/cellnumber_cluster.pdf", width = 3, height = 4)
+
+data_table$`Cell Types` <- factor(data_table$`Cell Types`, levels = c("NPVM", "PVM", "LAM", "AM", "CEM1", "CEM2", "PLAM", "RM"))
+D <- ggplot(data_table, aes(fill=`Cell Types`, y=Numbers, x=Groups)) + 
+    geom_bar(position="fill", stat="identity") + theme_bw() +
+  theme(axis.title.y = element_blank(),
+        panel.grid=element_blank(),
+        axis.text.y = element_text(size=5),
+        axis.text.x = element_text(size=5, colour = "black"),
+        axis.title.x = element_text(size=8, colour = "black")) +
+  scale_fill_manual(values = mycol) + NoLegend()   # + coord_flip()
+
+# ggsave("./3_Integration/results/2024-05-10/cellnumber_percent.pdf", width = 3, height = 4)
+combined_plot <- C + D + plot_layout(widths = c(2, 1)) + 
+  plot_annotation('Number & Percent \nof Macrophage Subclusters', 
+                        theme = theme(plot.title=element_text(hjust=0.5,size = 12)))
+ggsave("./subset_Macro/cellnumber_info.pdf", combined_plot, width = 2.7, height = 3)
+```
+
+### Barplot2 hfsc vs chow
+```{r}
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(scales)
+
+# ----- Palette (hue = Macro subcluster; shade = diet/group) -----
+base_cols <- c(
+  NPVM = "#7876B1",
+  PVM  = "#FFDC90",
+  LAM  = "#1F864E",
+  AM   = "#BC3B29",
+  CEM1 = "#0171B5",
+  CEM2 = "#E18728",
+  PLAM = "#6F99AD",
+  RM   = "#EE4B97"
+)
+
+fill_map <- c(
+  setNames(base_cols,              paste0(names(base_cols), ".Chow")),
+  setNames(alpha(base_cols, 0.45), paste0(names(base_cols), ".HFSC"))
+)
+
+# ----- Build count table from metadata (robust) -----
+meta <- seurat.combined.sct.Macro@meta.data
+ct_levels <- rev(c("NPVM","PVM","LAM","AM","CEM1","CEM2","PLAM","RM"))
+
+df <- meta %>%
+  count(`Cell Types` = sub_cluster, Groups = sample_simple, name = "Numbers") %>%
+  filter(Groups %in% c("Chow","HFSC")) %>%
+  mutate(
+    `Cell Types` = factor(`Cell Types`, levels = ct_levels),
+    Groups = factor(Groups, levels = c("Chow","HFSC")),
+    fill_id = interaction(`Cell Types`, Groups, sep = ".")
+  )
+
+# ----- Left panel: absolute counts (Chow above HFSC) -----
+C2 <- ggplot(df, aes(y = `Cell Types`, x = Numbers, fill = fill_id)) +
+  geom_col(width = 0.8, position = position_dodge2(width = 0.75, reverse = TRUE)) +
+  geom_text(
+    aes(label = Numbers),
+    position = position_dodge2(width = 0.75, reverse = TRUE),
+    hjust = -0.15, size = 2.2, colour = "black"
+  ) +
+  scale_fill_manual(values = fill_map) +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.12))) +
+  theme_bw() +
+  theme(
+    panel.grid = element_blank(),
+    legend.position = "none",
+    axis.title.y = element_blank(),
+    axis.title.x = element_text(size = 8),
+    axis.text.y  = element_text(size = 5, colour = "black"),
+    axis.text.x  = element_text(size = 5)
+  ) +
+  xlab("Numbers") +
+  coord_cartesian(clip = "off")
+
+# ----- Right panel data: within-group proportions -----
+dfp <- df %>%
+  group_by(Groups) %>%
+  mutate(pct = Numbers / sum(Numbers)) %>%
+  ungroup()
+
+# Flip stack order (keep consistent with your EC/ASPC style)
+stack_order <- rev(levels(df$`Cell Types`))
+
+dfp <- dfp %>%
+  mutate(
+    fill_id = factor(
+      as.character(fill_id),
+      levels = c(paste0(stack_order, ".Chow"),
+                 paste0(stack_order, ".HFSC"))
+    )
+  )
+stopifnot(sum(is.na(dfp$fill_id)) == 0)
+
+# ----- Right panel: stacked proportions (0–1 axis) + label >= 3% -----
+D2 <- ggplot(dfp, aes(x = Groups, y = Numbers, fill = fill_id)) +
+  geom_col(position = "fill", width = 0.8) +
+  geom_text(
+    aes(label = ifelse(pct >= 0.03, percent(pct, accuracy = 0.1), "")),
+    position = position_fill(vjust = 0.5),
+    size = 1.8, colour = "black"
+  ) +
+  scale_fill_manual(values = fill_map, na.value = "grey80") +
+  scale_y_continuous(
+    breaks = c(0, 0.25, 0.5, 0.75, 1),
+    labels = number_format(accuracy = 0.01),
+    expand = c(0, 0)
+  ) +
+  theme_bw(base_size = 6) +
+  theme(
+    panel.grid = element_blank(),
+    legend.position = "none",
+    axis.title.y = element_blank(),
+    axis.title.x = element_text(size = 8, colour = "black"),
+    axis.text.x  = element_text(size = 7, colour = "black"),
+    axis.text.y  = element_text(size = 7, colour = "black"),
+    axis.ticks   = element_line(linewidth = 0.25),
+    axis.line    = element_line(linewidth = 0.25),
+    panel.border = element_rect(linewidth = 0.3)
+  ) +
+  xlab("Groups")
+
+# ----- Combine & export -----
+combined_plot <- C2 + D2 +
+  plot_layout(widths = c(2, 1)) +
+  plot_annotation(
+    "Number & Percent \nof Macrophage Subclusters",
+    theme = theme(plot.title = element_text(hjust = 0.5, size = 8))
+  )
+getwd()
+ggsave("./subset_Macro/cellnumber_info222.pdf", combined_plot, width = 2.7, height = 3)
+
+```
+
+## Dotplot for markers
+```{r Clustered_DotPlot}
+# markers
+Idents(seurat.combined.sct.Macro) <- "sub_cluster"
+DefaultAssay(seurat.combined.sct.Macro) <- "RNA"
+table(seurat.combined.sct.Macro$sub_cluster)
+seurat.combined.sct.Macro <- JoinLayers(seurat.combined.sct.Macro)
+macrophage.markers <- FindAllMarkers(seurat.combined.sct.Macro, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+write.csv(macrophage.markers ,file = sprintf('./subset_Macro/macrophage_marker_all.csv'), row.names = T)
+table(macrophage.markers$cluster)
+macrophage.markers.sig <- macrophage.markers %>% group_by(cluster) %>% top_n(n = -20, wt = p_val) 
+macrophage.markers.top20 <- macrophage.markers.sig %>% group_by(cluster) %>% top_n(n = 20, wt = avg_log2FC) %>% arrange(desc(avg_log2FC), .by_group = TRUE)
+
+write.csv(macrophage.markers.top20,file = sprintf('./subset_Macro/macrophage_marker_top20.csv'),row.names = T)
+
+
+markers.to.plot = list(NPVM = c("Cd74","Abca9","H2-Aa","Fcgr3"),
+                    PVM = c("Lyve1","Cd163","Mctp2","Dnm1"),
+                    LAM = c("Lpl","Trem2","Rnf128","Cd68"),
+                    AM = c("Gpr141","Plac8","Itgal"),
+                    CEM1 = c("Col5a2","Col3a1","Lama2"),
+                    CEM2 = c("Kcnc2","Lama5","Fgd5"),
+                    PLAM = c("Kif11","Kif15","Kif2c"),
+                    RM = c("Prg4","Ltbp1","Itk"))  # Have a big overlap with the markers from Anitta, Cell Meta. 2021
+markers.to.plot = c("H2-Ab1","Cd74","Apoe",
+                    "Dnm1","Lyve1","Cd163",
+                    "Lpl","Trem2","Cd9",
+                    "Gpr141","Plac8","Itgal",
+                    "Col1a1","Lama2","Col5a2",
+                    "Kcnc2","Lama5","Flt4",
+                    "Pola1","Kif4","Kif2c",
+                    "Itk","Tgfb2","Cxcl13"
+                    )
+
+DefaultAssay(seurat.combined.sct.Macro) <- "RNA"
+Idents(seurat.combined.sct.Macro) <- "sub_cluster"
+levels(seurat.combined.sct.Macro) <- c("NPVM", "PVM", "LAM", "AM", "CEM1", "CEM2", "PLAM", "RM")
+pdf(file=sprintf('./subset_Macro/Dot_plot_ref2.pdf'), width=8, height=5)
+
+p <- DotPlot(seurat.combined.sct.Macro, 
+              features = markers.to.plot, 
+              dot.scale = 8,
+              cols = "RdBu",
+              split.by = "sample"
+              ) +
+  RotatedAxis() +
+  theme(
+    panel.border = element_rect(color="black"), #面板边框
+    panel.spacing = unit(1, "mm"),
+    #strip.background = element_rect(color="red"),
+    strip.text = element_text(margin=margin(b=3, unit="mm")),
+    strip.placement = 'outlet', 
+    axis.line = element_blank(),
+  ) +
+  labs(x="", y="",title = "vWAT Macrophage Marker Genes")
+
+print(p)
+cat("\n")
+dev.off()
+```
+
+# Trajectory Analysis
+```{r trajectory}
+#if (!requireNamespace("BiocManager", quietly = TRUE))
+#install.packages("BiocManager")
+#BiocManager::install(version = "3.18")
+#BiocManager::install(c('BiocGenerics', 'DelayedArray', 'DelayedMatrixStats',
+#                      'limma', 'lme4', 'S4Vectors', 'SingleCellExperiment',
+#                       'SummarizedExperiment', 'batchelor', 'HDF5Array',
+#                       'terra', 'ggrastr'))
+#install.packages("devtools")
+#devtools::install_github('cole-trapnell-lab/monocle3')
+library(monocle3)
+Idents(seurat.combined.sct.Macro) <- "sub_cluster"
+DefaultAssay(seurat.combined.sct.Macro) <- "RNA"
+# seurat对象转换为CDS对象
+seurat.combined.sct.Macro <- JoinLayers(seurat.combined.sct.Macro)
+data <-GetAssayData(seurat.combined.sct.Macro, assay = 'RNA', slot = 'counts')
+cell_metadata <- seurat.combined.sct.Macro@meta.data
+gene_annotation <- data.frame(gene_short_name = rownames(data),row.names = row.names(data))
+cds <- new_cell_data_set(data,
+                         cell_metadata = cell_metadata,
+                         gene_metadata = gene_annotation)
+# Standardization 
+cds <- preprocess_cds(cds, num_dim = 50)
+plot_pc_variance_explained(cds)
+
+#umap降维
+cds <- reduce_dimension(cds,reduction_method = "UMAP",cores = 16, umap.fast_sgd=T) #umap.fast_sgd=T进行随机降维,cores为多线程运算数量,这两个参数都能加快处理速度
+plot_cells(cds)
+colnames(colData(cds))
+#以之前的Seurat分群来添加颜色
+p1 <- plot_cells(cds, reduction_method="UMAP", color_cells_by="sub_cluster") + ggtitle('cds.umap')
+p1
+
+# 导入seurat对象的UAMP坐标信息
+cds.embed <- cds@int_colData$reducedDims$UMAP
+int.embed <- Embeddings(seurat.combined.sct.Macro, reduction = "umap")
+int.embed <- int.embed[rownames(cds.embed),]
+cds@int_colData$reducedDims$UMAP <- int.embed
+p2 <- plot_cells(cds, reduction_method="UMAP", color_cells_by="sub_cluster") + ggtitle('int.umap')
+p2
+
+# 识别细胞轨迹
+cds <- cluster_cells(cds,cluster_method = "louvain")
+plot_cells(cds, color_cells_by = "sub_cluster")
+cds <- learn_graph(cds)
+p = plot_cells(cds, color_cells_by = "sub_cluster", label_groups_by_cluster=FALSE,
+               label_leaves=FALSE, label_branch_points=FALSE)
+# ggsave("./subset_Macro/Trajectory.pdf", plot = p, width = 7, height = 6)
+
+p=plot_cells(cds,
+           color_cells_by = "sub_cluster",
+           trajectory_graph_color = "#2f4f4f",
+           label_cell_groups=FALSE,
+           label_leaves=TRUE,
+           label_branch_points=TRUE,
+           graph_label_size=2.3,
+           cell_size = 0.7)+ scale_color_nejm()
+ggsave("./subset_Macro/embryo.time.bin.new.pdf", plot = p, width = 7.5, height = 6)
+
+cds <- order_cells(cds)
+p1 = plot_cells(cds, 
+               color_cells_by = "pseudotime", 
+               label_cell_groups = TRUE, 
+               label_leaves = FALSE,
+               label_branch_points = FALSE,
+               cell_size = 0.7)
+ggsave("./subset_Macro/Trajectory_Pseudotime_new.pdf", plot = p1, width = 7.5, height = 6)
+```
+## split by sample
+```{r splite_by_sample}
+library(monocle3)
+cell_metadata <- seurat.combined.sct.Macro@meta.data
+gene_annotation <- data.frame(gene_short_name = rownames(data),row.names = row.names(data))
+cds <- new_cell_data_set(data,
+                         cell_metadata = cell_metadata,
+                         gene_metadata = gene_annotation)
+cds_chow <- cds[, colData(cds)$sample == "Chow"]
+cds_hfsc <- cds[, colData(cds)$sample == "HFSC"]
+
+# chow
+cds_chow <- preprocess_cds(cds_chow, num_dim = 50)
+plot_pc_variance_explained(cds_chow)
+cds_chow <- reduce_dimension(cds_chow, reduction_method = "UMAP", cores = 16, umap.fast_sgd=T) 
+cds_chow.embed <- cds_chow@int_colData$reducedDims$UMAP
+int.embed <- Embeddings(seurat.combined.sct.Macro, reduction = "umap")
+int_chow.embed <- int.embed[rownames(cds_chow.embed),]
+cds_chow@int_colData$reducedDims$UMAP <- int_chow.embed
+cds_chow <- cluster_cells(cds_chow,cluster_method = "louvain")
+cds_chow <- learn_graph(cds_chow)
+p_chow=plot_cells(cds_chow,
+           color_cells_by = "sub_cluster",
+           trajectory_graph_color = "#2f4f4f",
+           label_cell_groups=FALSE,
+           label_leaves=TRUE,
+           label_branch_points=TRUE,
+           graph_label_size=2.3,
+           cell_size = 0.7)+ scale_color_nejm()
+ggsave("./subset_Macro/embryo.time.bin.chow.pdf", plot = p_chow, width = 7.5, height = 6)
+cds_chow <- order_cells(cds_chow)
+p1_chow = plot_cells(cds_chow, 
+               color_cells_by = "pseudotime", 
+               label_cell_groups = TRUE, 
+               label_leaves = FALSE,
+               label_branch_points = FALSE,
+               cell_size = 0.7)
+ggsave("./subset_Macro/Trajectory_Pseudotime_chow.pdf", plot = p1_chow, width = 7.5, height = 6)
+
+# hfsc
+cds_hfsc <- preprocess_cds(cds_hfsc, num_dim = 50)
+plot_pc_variance_explained(cds_hfsc)
+cds_hfsc <- reduce_dimension(cds_hfsc, reduction_method = "UMAP", cores = 16, umap.fast_sgd=T) 
+cds_hfsc.embed <- cds_hfsc@int_colData$reducedDims$UMAP
+int.embed <- Embeddings(seurat.combined.sct.Macro, reduction = "umap")
+int_hfsc.embed <- int.embed[rownames(cds_hfsc.embed),]
+cds_hfsc@int_colData$reducedDims$UMAP <- int_hfsc.embed
+cds_hfsc <- cluster_cells(cds_hfsc,cluster_method = "louvain")
+cds_hfsc <- learn_graph(cds_hfsc)
+p_hfsc=plot_cells(cds_hfsc,
+           color_cells_by = "sub_cluster",
+           trajectory_graph_color = "#2f4f4f",
+           label_cell_groups=FALSE,
+           label_leaves=TRUE,
+           label_branch_points=TRUE,
+           graph_label_size=2.3,
+           cell_size = 0.7)+ scale_color_nejm()
+ggsave("./subset_Macro/embryo.time.bin.hfsc.pdf", plot = p_hfsc, width = 7.5, height = 6)
+cds_hfsc <- order_cells(cds_hfsc)
+p1_hfsc = plot_cells(cds_hfsc, 
+               color_cells_by = "pseudotime", 
+               label_cell_groups = TRUE, 
+               label_leaves = FALSE,
+               label_branch_points = FALSE,
+               cell_size = 0.7)
+ggsave("./subset_Macro/Trajectory_Pseudotime_hfsc.pdf", plot = p1_hfsc, width = 7.5, height = 6)
+
+```
+
+## Identification of Trajectory Genes
+```{r trajectory_gene}
+Track_genes <- graph_test(cds, neighbor_graph="principal_graph", cores=6)
+Track_genes <- Track_genes[,c(5,2,3,4,1,6)] %>% filter(q_value < 1e-2)
+write.csv(Track_genes, "./subset_Macro/Trajectory_genes.csv", row.names = F)
+
+#挑选前10个基因进行绘图
+Track_genes_sig <- Track_genes %>% top_n(n=20, morans_I) %>%
+  pull(gene_short_name) %>% as.character()
+p2 <- plot_genes_in_pseudotime(cds[Track_genes_sig,], color_cells_by="sub_cluster", 
+                              min_expr=0.01, ncol = 5) + scale_color_nejm()
+ggsave("./subset_Macro/Genes_Jitterplot_20.pdf", plot = p2, width = 8, height = 4)
+
+# chow group
+Track_genes_chow <- graph_test(cds_chow, neighbor_graph="principal_graph", cores=6)
+Track_genes_chow <- Track_genes_chow[,c(5,2,3,4,1,6)] %>% filter(q_value < 1e-2)
+write.csv(Track_genes_chow, "./subset_Macro/Trajectory_genes_chow.csv", row.names = F)
+Track_genes_chow_sig <- Track_genes_chow %>% top_n(n=20, morans_I) %>%
+  pull(gene_short_name) %>% as.character()
+p3 <- plot_genes_in_pseudotime(cds_chow[Track_genes_chow_sig,], color_cells_by="sub_cluster", 
+                              min_expr=0.01, ncol = 5) + scale_color_nejm()
+ggsave("./subset_Macro/Genes_chow_Jitterplot_20.pdf", plot = p3, width = 8, height = 4)
+
+M2_genes <- c("Mrc1", "Arg1", "Cd163", "Retnla",  "Il10", "Pparg") # CD206 (MRC1); Arginase 1 (ARG1); Fizz1 (Retnla/RELMα in mice); PPARγ (Peroxisome proliferator-activated receptor gamma
+p4 <- plot_genes_in_pseudotime(cds_chow[M2_genes,], color_cells_by="sub_cluster", 
+                              min_expr=0.01, ncol = 2) + scale_color_nejm()
+ggsave("./subset_Macro/Genes_chow_Jitterplot_M2.pdf", plot = p4, width = 5, height = 4)
+
+M1_genes <- c("Nos2", "Il6", "Il1b", "Cd80", "Cd86", "Cybb") #
+p4 <- plot_genes_in_pseudotime(cds_chow[M1_genes,], color_cells_by="sub_cluster", 
+                              min_expr=0.01, ncol = 2) + scale_color_nejm()
+ggsave("./subset_Macro/Genes_chow_Jitterplot_M1.pdf", plot = p4, width = 5, height = 3)
+
+M0_genes <- c("Adgre1", "Itgam", "Cd14", "Cd68") #
+p4 <- plot_genes_in_pseudotime(cds_chow[M0_genes,], color_cells_by="sub_cluster", 
+                              min_expr=0.01, ncol = 2) + scale_color_nejm()
+ggsave("./subset_Macro/Genes_chow_Jitterplot_M0.pdf", plot = p4, width = 5, height = 3)
+
+# HFSC group
+Track_genes_hfsc <- graph_test(cds_hfsc, neighbor_graph="principal_graph", cores=6)
+Track_genes_hfsc <- Track_genes_hfsc[,c(5,2,3,4,1,6)] %>% filter(q_value < 1e-2)
+write.csv(Track_genes_hfsc, "./subset_Macro/Trajectory_genes_hfsc.csv", row.names = F)
+Track_genes_hfsc_sig <- Track_genes_hfsc %>% top_n(n=20, morans_I) %>%
+  pull(gene_short_name) %>% as.character()
+p3 <- plot_genes_in_pseudotime(cds_hfsc[Track_genes_hfsc_sig,], color_cells_by="sub_cluster", 
+                              min_expr=0.01, ncol = 5) + scale_color_nejm()
+ggsave("./subset_Macro/Genes_hfsc_Jitterplot_20.pdf", plot = p3, width = 8, height = 4)
+
+M2_genes <- c("Mrc1", "Arg1", "Cd163", "Retnla",  "Il10", "Pparg") 
+p4 <- plot_genes_in_pseudotime(cds_hfsc[M2_genes,], color_cells_by="sub_cluster", 
+                              min_expr=0.01, ncol = 2) + scale_color_nejm()
+ggsave("./subset_Macro/Genes_hfsc_Jitterplot_M2.pdf", plot = p4, width = 5, height = 4)
+ggsave("./subset_Macro/Genes_hfsc_Jitterplot_M2.png", plot = p4, width = 5, height = 4, dpi = 500)
+
+M1_genes <- c("Nos2", "Il6", "Il1b", "Cd80", "Cd86", "Cybb") 
+p4 <- plot_genes_in_pseudotime(cds_hfsc[M1_genes,], color_cells_by="sub_cluster", 
+                              min_expr=0.01, ncol = 2) + scale_color_nejm()
+ggsave("./subset_Macro/Genes_hfsc_Jitterplot_M1.pdf", plot = p4, width = 5, height = 4)
+ggsave("./subset_Macro/Genes_hfsc_Jitterplot_M1.png", plot = p4, width = 5, height = 4, dpi = 500)
+
+M0_genes <- c("Adgre1", "Itgam", "Cd14", "Cd68") #
+p4 <- plot_genes_in_pseudotime(cds_hfsc[M0_genes,], color_cells_by="sub_cluster", 
+                              min_expr=0.01, ncol = 2) + scale_color_nejm()
+ggsave("./subset_Macro/Genes_hfsc_Jitterplot_M0.pdf", plot = p4, width = 5, height = 3)
+```
+
+# DE_LAM
+```{r DE_LAM}
+DefaultAssay(seurat.combined.sct.Macro) <-"RNA"
+Idents(seurat.combined.sct.Macro) <- "DE_subgroup"
+table(seurat.combined.sct.Macro$DE_subgroup)
+seurat.combined.sct.Macro <- JoinLayers(seurat.combined.sct.Macro)
+markers_LAM <- FindMarkers(object = seurat.combined.sct.Macro, ident.1 = "LAM-HFSC", ident.2 = "LAM-Chow")
+markers_LAM_df <- markers_LAM %>% as.data.frame() %>% 
+  tibble::rownames_to_column(var = "gene") %>% 
+  dplyr::arrange(p_val_adj)
+
+saveRDS(markers_LAM_df, file = file.path("./subset_Macro/data/2024-05-06/", "markers_LAM.rds"))
+rio::export(markers_LAM_df, file = paste0("./subset_Macro/results/2024-05-06/DE_results_", "LAM-HFSC_vs_Chow",".csv"))
+markers_LAM_df_sig <- markers_LAM_df %>% dplyr::filter(p_val_adj <= 0.01)
+rio::export(markers_LAM_df_sig, file = paste0("./subset_Macro/results/2024-05-06/DE_results_","LAM-HFSC_vs_Chow","_sig01",".csv"))
+```
+
+# DE_PVM
+```{r DE_PVM}
+DefaultAssay(seurat.combined.sct.Macro) <-"RNA"
+Idents(seurat.combined.sct.Macro) <- "DE_subgroup"
+table(seurat.combined.sct.Macro$DE_subgroup)
+seurat.combined.sct.Macro <- JoinLayers(seurat.combined.sct.Macro)
+markers_PVM <- FindMarkers(object = seurat.combined.sct.Macro, ident.1 = "PVM-HFSC", ident.2 = "PVM-Chow")
+markers_PVM_df <- markers_PVM %>% as.data.frame() %>% 
+  tibble::rownames_to_column(var = "gene") %>% 
+  dplyr::arrange(p_val_adj)
+
+saveRDS(markers_PVM_df, file = file.path("./subset_Macro/data/2024-05-06/", "markers_PVM.rds"))
+rio::export(markers_PVM_df, file = paste0("./subset_Macro/results/2024-05-06/DE_results_", "PVM-HFSC_vs_Chow",".csv"))
+markers_PVM_df_sig <- markers_PVM_df %>% dplyr::filter(p_val_adj <= 0.01)
+rio::export(markers_PVM_df_sig, file = paste0("./subset_Macro/results/2024-05-06/DE_results_","PVM-HFSC_vs_Chow","_sig01",".csv"))
+```
+# DE_CEM1
+```{r DE_CEM1}
+DefaultAssay(seurat.combined.sct.Macro) <-"RNA"
+Idents(seurat.combined.sct.Macro) <- "DE_subgroup"
+table(seurat.combined.sct.Macro$DE_subgroup)
+seurat.combined.sct.Macro <- JoinLayers(seurat.combined.sct.Macro)
+markers_CEM1 <- FindMarkers(object = seurat.combined.sct.Macro, ident.1 = "CEM1-HFSC", ident.2 = "CEM1-Chow")
+markers_CEM1_df <- markers_CEM1 %>% as.data.frame() %>% 
+  tibble::rownames_to_column(var = "gene") %>% 
+  dplyr::arrange(p_val_adj)
+
+saveRDS(markers_CEM1_df, file = file.path("./subset_Macro/data/2024-05-06/", "markers_CEM1.rds"))
+rio::export(markers_CEM1_df, file = paste0("./subset_Macro/results/2024-05-06/DE_results_", "CEM1-HFSC_vs_Chow",".csv"))
+markers_CEM1_df_sig <- markers_CEM1_df %>% dplyr::filter(p_val_adj <= 0.01)
+rio::export(markers_CEM1_df_sig, file = paste0("./subset_Macro/results/2024-05-06/DE_results_","CEM1-HFSC_vs_Chow","_sig01",".csv"))
+```
+
+# Macro subcluster loop：DE + Volcano + Bubble
+```{r Macro_DE_volcano_bubble_loop}
+library(dplyr)
+library(ggplot2)
+library(ggrepel)
+library(ggthemes)
+
+# -----------------------------
+# Input object settings
+# -----------------------------
+DefaultAssay(seurat.combined.sct.Macro) <- "RNA"
+Idents(seurat.combined.sct.Macro) <- "DE_subgroup"
+table(seurat.combined.sct.Macro$DE_subgroup)
+
+# Merge layers once
+seurat.combined.sct.Macro <- JoinLayers(seurat.combined.sct.Macro)
+
+# Subclusters (use your provided levels)
+macro_types <- c("NPVM","LAM","PVM","AM","CEM1","CEM2","PLAM","RM")
+
+# Output folders
+date_dir <- "2024-05-06"
+data_dir <- file.path("./subset_Macro/data",    date_dir)
+res_dir  <- file.path("./subset_Macro/results", date_dir)
+plot_dir <- file.path("./subset_Macro/plots",   date_dir)
+
+if (!dir.exists(data_dir)) dir.create(data_dir, recursive = TRUE)
+if (!dir.exists(res_dir))  dir.create(res_dir,  recursive = TRUE)
+if (!dir.exists(plot_dir)) dir.create(plot_dir, recursive = TRUE)
+
+# -----------------------------
+# Thresholds (match your Macro DE export)
+# -----------------------------
+sig_adjP <- 0.01
+
+# Volcano thresholds (same scheme as before)
+logFCcut  <- 1
+pvalCut   <- 1e-2
+logFCcut2 <- 2
+logFCcut3 <- 5
+pvalCut2  <- 1e-10
+pvalCut3  <- 1e-20
+
+# Axis control
+x_buffer <- 0.5
+robust_x_q <- 0.99      # robust symmetric xlim for volcano
+robust_y_q <- 0.99      # robust ymax for volcano (tight and scientific)
+min_xlim <- logFCcut2   # ensure at least covers ±2
+
+# -----------------------------
+# Helpers: robust symmetric xlim
+# -----------------------------
+robust_symmetric_xlim <- function(logfc, q = 0.99, buffer = 0.5, min_limit = 2) {
+  logfc <- logfc[is.finite(logfc)]
+  if (length(logfc) == 0) return(c(-min_limit, min_limit))
+  abs_fc <- abs(logfc)
+
+  qv <- as.numeric(stats::quantile(abs_fc, probs = q, na.rm = TRUE, names = FALSE))
+  if (!is.finite(qv) || length(abs_fc) < 50) qv <- max(abs_fc, na.rm = TRUE)
+
+  lim <- max(qv, min_limit, na.rm = TRUE)
+  lim <- ceiling(lim + buffer)
+  c(-lim, lim)
+}
+
+# -----------------------------
+# Helper: Volcano plot
+# -----------------------------
+make_volcano <- function(x, title_text = "") {
+
+  # X-axis: symmetric, include ALL points
+  logfc <- x$logFC[is.finite(x$logFC)]
+  xmax_abs <- max(abs(logfc), na.rm = TRUE)
+  xmax_abs <- ceiling(xmax_abs + x_buffer)
+
+  # Y-axis: include ALL points
+  logp <- -log10(x$P.Value)
+  logp <- logp[is.finite(logp)]
+  ymax <- max(logp, na.rm = TRUE)
+  ymax <- ceiling(ymax * 1.05)
+
+  ymin <- 0
+
+  # Color mapping
+  n1 <- nrow(x)
+  cols <- rep("grey", n1)
+  names(cols) <- rownames(x)
+
+  cols[x$P.Value < pvalCut  & x$logFC >  logFCcut]  <- "#f77e7e"
+  cols[x$P.Value < pvalCut2 & x$logFC >  logFCcut2] <- "#c21b2b"
+  cols[x$P.Value < pvalCut  & x$logFC < -logFCcut]  <- "#73b6f5"
+  cols[x$P.Value < pvalCut2 & x$logFC < -logFCcut2] <- "#136cbf"
+
+  x$color_transparent <- adjustcolor(cols, alpha.f = 0.5)
+
+  # Size mapping
+  size <- rep(1, n1)
+  size[x$P.Value < pvalCut  & x$logFC >  logFCcut]  <- 2
+  size[x$P.Value < pvalCut2 & x$logFC >  logFCcut2] <- 4
+  size[x$P.Value < pvalCut3 & x$logFC >  logFCcut3] <- 6
+  size[x$P.Value < pvalCut  & x$logFC < -logFCcut]  <- 2
+  size[x$P.Value < pvalCut2 & x$logFC < -logFCcut2] <- 4
+  size[x$P.Value < pvalCut3 & x$logFC < -logFCcut3] <- 6
+
+  # Plot
+  p <- ggplot(x, aes(x = logFC, y = -log10(P.Value))) +
+    geom_point(alpha = 0.6, size = size, colour = x$color_transparent) +
+    labs(
+      x = bquote(~Log[2]~"(fold change)"),
+      y = bquote(~-Log[10]~italic("P-value")),
+      title = title_text
+    ) +
+    geom_vline(xintercept = c(-logFCcut, logFCcut), color="grey40",
+               linetype="longdash", lwd=0.1) +
+    geom_hline(yintercept = -log10(pvalCut), color="grey40",
+               linetype="longdash", lwd=0.1) +
+    geom_vline(xintercept = c(-logFCcut2, logFCcut2), color="grey40",
+               linetype="longdash", lwd=0.1) +
+    geom_hline(yintercept = -log10(pvalCut2), color="grey40",
+               linetype="longdash", lwd=0.1) +
+    coord_cartesian(
+      xlim = c(-xmax_abs, xmax_abs),
+      ylim = c(ymin, ymax)
+    ) +
+    theme_bw(base_size = 10) +
+    theme(panel.grid = element_blank())
+
+  # Labels
+  n_label <- 2
+  p <- p +
+    geom_text_repel(
+      aes(label = ifelse(logFC >  n_label & -log10(P.Value) > 5, Gene, "")),
+      colour="#9c0917", size=3,
+      box.padding = unit(0.3, "lines"),
+      point.padding = unit(0.01, "lines")
+    ) +
+    geom_text_repel(
+      aes(label = ifelse(logFC < -n_label & -log10(P.Value) > 5, Gene, "")),
+      colour="#0054a3", size=3,
+      box.padding = unit(0.3, "lines"),
+      point.padding = unit(0.01, "lines")
+    )
+
+  return(p)
+}
+
+# -----------------------------
+# Helper: Bubble plot
+# (sig set first, then rank by LogFC, take extremes)
+# -----------------------------
+make_bubble <- function(x_sig, title_text = "") {
+
+  if (nrow(x_sig) < 2) return(NULL)
+
+  # Sort by LogFC and take extremes (Areg logic)
+  data <- x_sig[order(x_sig$LogFC, decreasing = FALSE), , drop = FALSE]
+
+  n_half <- min(20, floor(nrow(data) / 2))
+  if (n_half < 1) return(NULL)
+
+  data <- rbind(
+    data[1:n_half, , drop = FALSE],
+    data[(nrow(data) - n_half + 1):nrow(data), , drop = FALSE]
+  )
+
+  data$ID <- factor(data$ID, levels = unique(data$ID))
+  data$Regulation <- factor(ifelse(data$LogFC > 0, "Up", "Down"),
+                            levels = c("Up", "Down"))
+
+  xmax_abs <- max(abs(data$LogFC), na.rm = TRUE)
+  xmax_abs <- ceiling(xmax_abs + 0.5)
+
+  p <- ggplot(data, aes(x=LogFC, y=ID, size=-log10(P.value),
+                        shape=Regulation, color=Regulation)) +
+    geom_point(stroke = 1) +
+    scale_shape_manual(values = c("Up" = 24, "Down" = 25)) +
+    scale_color_manual(values = c("Up" = "#DA7680", "Down" = "#72A7D9")) +
+    theme_minimal() +
+    theme(
+      panel.background = element_rect(fill="white"),
+      panel.grid.major = element_line(color="lightgrey", size=0.1),
+      axis.text.x = element_text(size=8, face="bold"),
+      axis.text.y = element_text(size=10, color="black", face="bold"),
+      axis.title.x = element_text(size=14, face="bold"),
+      axis.title.y = element_text(size=14, face="bold")
+    ) +
+    labs(
+      title = title_text,
+      size  = bquote(~-Log[10]~italic("P-value")),
+      x = "LogFC",
+      y = "Gene Symbol",
+      color = "Gene Regulation",
+      shape = "Gene Regulation"
+    ) +
+    scale_x_continuous(limits = c(-xmax_abs, xmax_abs)) +
+    guides(size = guide_legend(override.aes = list(shape = 17)))
+
+  return(p)
+}
+
+# Select a relaxed significant set for bubble plot if too few genes pass the cutoff
+select_sig_for_bubble <- function(de2,
+                                  cutoffs = c(0.01, 0.05, 0.1, 0.2),
+                                  n_target_each = 20) {
+
+  # de2 columns: ID, P.value, LogFC, adjP.Value
+  for (c in cutoffs) {
+    x_sig <- de2[de2$adjP.Value <= c, , drop = FALSE]
+    n_up <- sum(x_sig$LogFC > 0, na.rm = TRUE)
+    n_dn <- sum(x_sig$LogFC < 0, na.rm = TRUE)
+
+    # Enough genes on both sides
+    if (n_up >= n_target_each && n_dn >= n_target_each) {
+      return(list(data = x_sig, cutoff_used = c))
+    }
+  }
+
+  # If still insufficient, return the least strict sig set
+  # If even that is tiny, fall back to all genes to avoid empty plots
+  x_sig <- de2[de2$adjP.Value <= max(cutoffs), , drop = FALSE]
+  if (nrow(x_sig) < 2) x_sig <- de2
+
+  return(list(data = x_sig, cutoff_used = max(cutoffs)))
+}
+
+# -----------------------------
+# Main loop: DE + export + plots
+# -----------------------------
+for (ct in macro_types) {
+
+  message("Processing ", ct)
+
+  ident_hfsc <- paste0(ct, "-HFSC")
+  ident_chow <- paste0(ct, "-Chow")
+
+  markers <- FindMarkers(
+    object  = seurat.combined.sct.Macro,
+    ident.1 = ident_hfsc,
+    ident.2 = ident_chow
+  )
+
+  markers_df <- markers %>%
+    as.data.frame() %>%
+    tibble::rownames_to_column(var = "gene") %>%
+    dplyr::arrange(p_val_adj)
+
+  # Save RDS
+  saveRDS(markers_df, file = file.path(data_dir, paste0("markers_", ct, ".rds")))
+
+  # Export full CSV
+  full_csv <- file.path(res_dir, paste0("DE_results_", ct, "-HFSC_vs_Chow.csv"))
+  rio::export(markers_df, file = full_csv)
+
+  # Export sig CSV (adjP <= 0.01, your Macro setting)
+  markers_df_sig <- markers_df %>% dplyr::filter(p_val_adj <= sig_adjP)
+  sig_csv <- file.path(res_dir, paste0("DE_results_", ct, "-HFSC_vs_Chow_sig01.csv"))
+  rio::export(markers_df_sig, file = sig_csv)
+
+  # --------
+  # Volcano plot input table (standardize column names)
+  # --------
+  de <- read.csv(full_csv)
+  colnames(de)[1:6] <- c("Gene","P.Value","logFC","pct.1","pct.2","adjP.Value")
+  rownames(de) <- de$Gene
+
+  # Volcano
+  p_vol <- make_volcano(de, title_text = paste0(ct, ": HFSC vs Chow"))
+  ggsave(file.path(plot_dir, paste0("DE_", ct, "_volcano.pdf")), p_vol, width=6, height=6)
+  ggsave(file.path(plot_dir, paste0("DE_", ct, "_volcano.png")), p_vol, width=6, height=6, dpi=500)
+
+  # --------
+  # Bubble plot input table (from sig set first)
+  # --------
+  de2 <- de[, c("Gene","P.Value","logFC","adjP.Value")]
+  colnames(de2) <- c("ID","P.value","LogFC","adjP.Value")
+
+  sig_pick <- select_sig_for_bubble(de2,
+                                    cutoffs = c(0.01, 0.05, 0.1, 0.2),
+                                    n_target_each = 20
+                                    )
+
+  de2_sig <- sig_pick$data
+  cutoff_used <- sig_pick$cutoff_used
+
+  p_bub <- make_bubble(de2_sig, title_text = paste0("Significant DEGs in ", ct, ": HFSC vs Chow"))
+  if (!is.null(p_bub)) {
+    ggsave(file.path(plot_dir, paste0("DE_", ct, "_bubble.pdf")), p_bub, width=5, height=7, dpi=600)
+    ggsave(file.path(plot_dir, paste0("DE_", ct, "_bubble.png")), p_bub, width=5, height=7, dpi=600)
+  } else {
+    message("  Bubble skipped (not enough significant genes).")
+  }
+}
+```
