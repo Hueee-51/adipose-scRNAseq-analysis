@@ -1,6 +1,6 @@
 # ============================================================
 # Script: 08_cellchat_major_celltype_analysis.R
-# Project: Adipose snRNA-seq analysis
+# Project: Adipose scRNA-seq analysis
 # Purpose: CellChat analysis at the major cell type level
 # Author: Yi Hu
 # ============================================================

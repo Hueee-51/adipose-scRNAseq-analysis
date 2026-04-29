@@ -1,6 +1,6 @@
-# Adipose snRNA-seq Analysis
+# Adipose scRNA-seq Analysis
 
-This repository contains the public analysis workflow for single-nucleus RNA sequencing (snRNA-seq) analysis of adipose tissue under diet-induced metabolic stress.
+This repository contains the public analysis workflow for single-cell RNA sequencing (scRNA-seq) analysis of adipose tissue under diet-induced metabolic stress.
 
 The code documents the major computational steps used in the study, including quality control, sample integration, major cell type annotation, cell type-specific differential expression analysis, ASPC/endothelial/macrophage subcluster analysis, pathway analysis input generation, and CellChat-based cell-cell communication analysis.
 
@@ -42,7 +42,7 @@ adipose-scRNAseq-analysis/
 
 **Script:** `scripts/01_quality_control.R`
 
-This script loads raw or processed 10x Genomics count matrices, creates Seurat objects, calculates quality-control metrics, filters low-quality nuclei, and saves QC-filtered Seurat objects for downstream analysis.
+This script loads raw or processed 10x Genomics count matrices, creates Seurat objects, calculates quality-control metrics, filters low-quality cells, and saves QC-filtered Seurat objects for downstream analysis.
 
 Main QC metrics include:
 

@@ -1,6 +1,6 @@
 # ============================================================
 # Script: 06_endothelial_subcluster_analysis.R
-# Project: Adipose snRNA-seq analysis
+# Project: Adipose scRNA-seq analysis
 # Purpose: Subcluster endothelial cells and perform subcluster-level DE analysis
 # Author: Yi Hu
 # ============================================================

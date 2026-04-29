@@ -1,12 +1,12 @@
 # ============================================================
 # Script: 03_clustering_annotation.R
-# Project: Adipose snRNA-seq analysis
+# Project: Adipose scRNA-seq analysis
 # Purpose: Annotate major cell types after Seurat integration
 # Author: Yi Hu
 # ============================================================
 
 # This script provides the core workflow for annotating major cell types
-# from integrated snRNA-seq clusters. Cluster annotation was based on
+# from integrated scRNA-seq clusters. Cluster annotation was based on
 # canonical marker gene expression and cluster-level marker analysis.
 #
 # Input:

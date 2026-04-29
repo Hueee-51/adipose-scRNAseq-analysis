@@ -1,12 +1,12 @@
 # ============================================================
 # Script: 02_integration.R
-# Project: Adipose snRNA-seq analysis
-# Purpose: Integrate QC-filtered snRNA-seq samples using Seurat
+# Project: Adipose scRNA-seq analysis
+# Purpose: Integrate QC-filtered scRNA-seq samples using Seurat
 # Author: Yi Hu
 # ============================================================
 
 # This script provides the core integration workflow used for the
-# adipose snRNA-seq analysis. Large Seurat objects and raw count matrices
+# adipose scRNA-seq analysis. Large Seurat objects and raw count matrices
 # are not included in this public repository.
 
 # -----------------------------

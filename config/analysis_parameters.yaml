@@ -1,5 +1,5 @@
 project:
-  name: "Adipose snRNA-seq analysis"
+  name: "Adipose scRNA-seq analysis"
   organism: "Mus musculus vWAT"
   assay: "single-cell RNA-seq"
 

@@ -1,12 +1,12 @@
 # ============================================================
 # Script: 01_quality_control.R
-# Project: Adipose snRNA-seq analysis
-# Purpose: Perform sample-level quality control for snRNA-seq data
+# Project: Adipose scRNA-seq analysis
+# Purpose: Perform sample-level quality control for scRNA-seq data
 # Author: Yi Hu
 # ============================================================
 
 # This script provides a public skeleton of the QC workflow used for
-# single-nucleus RNA-seq analysis. Raw and processed count matrices are
+# single-cell RNA-seq analysis. Raw and processed count matrices are
 # available through GEO. 
 
 # -----------------------------

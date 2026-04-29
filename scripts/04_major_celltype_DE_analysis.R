@@ -1,6 +1,6 @@
 # ============================================================
 # Script: 04_major_celltype_DE_analysis.R
-# Project: Adipose snRNA-seq analysis
+# Project: Adipose scRNA-seq analysis
 # Purpose: Perform major cell type-level differential expression analysis
 # Author: Yi Hu
 # ============================================================

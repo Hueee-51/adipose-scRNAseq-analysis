@@ -1,6 +1,6 @@
 # ============================================================
 # Script: 05_aspc_subcluster_analysis.R
-# Project: Adipose snRNA-seq analysis
+# Project: Adipose scRNA-seq analysis
 # Purpose: Subcluster adipose stem and progenitor cells (ASPCs)
 # Author: Yi Hu
 # ============================================================

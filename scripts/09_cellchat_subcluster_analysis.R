@@ -1,6 +1,6 @@
 # ============================================================
 # Script: 09_cellchat_subcluster_analysis.R
-# Project: Adipose snRNA-seq analysis
+# Project: Adipose scRNA-seq analysis
 # Purpose: CellChat analysis at the subcluster level
 # Author: Yi Hu
 # ============================================================
