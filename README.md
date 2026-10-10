@@ -4,8 +4,6 @@ This repository contains the public analysis workflow for single-cell RNA sequen
 
 The code documents the major computational steps used in the study, including quality control, sample integration, major cell type annotation, cell type-specific differential expression analysis, ASPC/endothelial/macrophage subcluster analysis, pathway analysis input generation, and CellChat-based cell-cell communication analysis.
 
-Large sequencing files, processed Seurat objects, intermediate R objects, and manuscript-specific figure styling scripts are not included in this repository.
-
 ---
 
 ## Repository overview
@@ -92,7 +90,7 @@ Major cell types include:
 - Dendritic Cell
 - Neutrophil
 
-Clusters sharing the same canonical marker profile were merged into biologically interpretable major cell types. The annotation table in this script records the final annotation used for the manuscript analysis. Cluster IDs may vary if the workflow is rerun independently under different package versions or parameter settings.
+Clusters sharing the same canonical marker profile were merged into biologically interpretable major cell types. The annotation table in this script records the final annotation used for the manuscript analysis. 
 
 Representative marker genes used to guide annotation include:
 
@@ -158,7 +156,6 @@ ASPC subclusters used in the analysis include:
 - PreA
 - RMP
 
-Unassigned clusters were excluded from downstream ASPC subcluster analysis.
 
 ---
 
@@ -187,8 +184,6 @@ Endothelial subclusters used in the analysis include:
 - MbEC: Metabolic Endothelial Cells
 - MesEC: Mesenchymal-like Endothelial Cells
 - LEC: Lymphatic Endothelial Cells
-
-Unassigned clusters were excluded from downstream endothelial subcluster analysis.
 
 ---
 
@@ -276,10 +271,9 @@ Large files, including raw count matrices, processed Seurat objects, intermediat
 Placeholder accession:
 
 ```text
-GEO accession: GSE000000
+GEO accession: GSE
 ```
 
-The repository is designed to document the computational workflow. It is not intended to store large sequencing datasets or intermediate Seurat objects.
 
 ---
 
@@ -320,8 +314,6 @@ results/
 └── cellchat_subcluster/
 ```
 
-Generated outputs are not committed to the public repository.
-
 ---
 
 ## Software and packages
@@ -346,8 +338,6 @@ Package versions should be checked using the `sessionInfo()` outputs generated b
 This repository provides a public workflow skeleton and documents the analysis logic used in the study.
 
 Because Seurat clustering results can depend on software versions, package updates, random seeds, and preprocessing details, exact cluster IDs may not be identical if the full workflow is rerun independently. Final cell type and subcluster annotations were assigned based on canonical marker gene expression and cluster-level marker analysis.
-
-Publication-quality figure styling, exploratory visualization code, local file paths, large intermediate objects, and manuscript-specific figure adjustments are not included.
 
 ---
 
